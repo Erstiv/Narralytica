@@ -13,6 +13,19 @@ class Show(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
+    year = Column(Integer)
+    network = Column(String(255))
+    overview = Column(Text)
+    genres = Column(JSON, default=[])
+    sonarr_id = Column(Integer)           # Sonarr series ID for API calls
+    tvdb_id = Column(Integer)             # TVDB ID for cross-referencing
+    poster_url = Column(Text)             # From Sonarr/TVDB
+    fanart_url = Column(Text)             # Backdrop art
+    banner_url = Column(Text)             # Banner image
+    clearlogo_url = Column(Text)          # Transparent logo
+    media_path = Column(Text)             # Filesystem path on Plex server
+    rating_value = Column(Float)          # TVDB/TMDB rating
+    rating_votes = Column(Integer)        # Number of votes
     theme_config = Column(JSON, default={})
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -28,6 +41,9 @@ class Episode(Base):
     season = Column(Integer, nullable=False)
     episode_number = Column(Integer, nullable=False)
     duration_seconds = Column(Float)
+    air_date = Column(String(20))         # From Sonarr (YYYY-MM-DD)
+    overview = Column(Text)               # Episode synopsis from Sonarr
+    sonarr_episode_id = Column(Integer)   # Sonarr episode ID
     file_path = Column(Text)
     compressed_path = Column(Text)
     status = Column(String(50), default="pending")

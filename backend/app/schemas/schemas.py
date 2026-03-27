@@ -6,10 +6,30 @@ from datetime import datetime
 class ShowOut(BaseModel):
     id: int
     name: str
-    theme_config: dict
+    year: int | None = None
+    network: str | None = None
+    overview: str | None = None
+    genres: list = []
+    sonarr_id: int | None = None
+    tvdb_id: int | None = None
+    poster_url: str | None = None
+    fanart_url: str | None = None
+    banner_url: str | None = None
+    clearlogo_url: str | None = None
+    media_path: str | None = None
+    rating_value: float | None = None
+    rating_votes: int | None = None
+    theme_config: dict = {}
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ShowCreate(BaseModel):
+    """Create a show manually (without Sonarr)."""
+    name: str
+    year: int | None = None
+    theme_config: dict = {}
 
 
 # --- Episodes ---
@@ -20,6 +40,8 @@ class EpisodeOut(BaseModel):
     season: int
     episode_number: int
     duration_seconds: float | None
+    air_date: str | None = None
+    overview: str | None = None
     status: str
     gemini_cost_usd: float
     indexed_at: datetime | None
