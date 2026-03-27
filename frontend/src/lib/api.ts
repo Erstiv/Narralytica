@@ -22,7 +22,7 @@ export const getScene = (id: number) => fetchAPI<Scene>(`/scenes/${id}`);
 
 // Search
 export const searchScenes = (query: SearchRequest) =>
-  fetchAPI<Scene[]>("/search/", {
+  fetchAPI<SearchResult[]>("/search/", {
     method: "POST",
     body: JSON.stringify(query),
   });
@@ -65,6 +65,11 @@ export interface Scene {
   thumbnail_path: string | null;
   description_text: string | null;
   created_at: string;
+}
+
+export interface SearchResult {
+  scene: Scene;
+  similarity: number;
 }
 
 export interface SearchRequest {

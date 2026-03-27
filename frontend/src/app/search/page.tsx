@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { searchScenes, type Scene } from "@/lib/api";
+import { searchScenes, type SearchResult } from "@/lib/api";
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Scene[]>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
@@ -59,39 +59,42 @@ export default function SearchPage() {
           </p>
         )}
 
-        {results.map((scene) => (
+        {results.map((result) => (
           <div
-            key={scene.id}
+            key={result.scene.id}
             className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex gap-4"
           >
             {/* Thumbnail placeholder */}
             <div className="w-40 h-24 bg-gray-800 rounded flex-shrink-0 flex items-center justify-center text-gray-600 text-xs">
-              {formatTime(scene.start_timestamp)}
+              {formatTime(result.scene.start_timestamp)}
             </div>
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm text-gray-400">
-                  {formatTime(scene.start_timestamp)} &ndash;{" "}
-                  {formatTime(scene.end_timestamp)}
+                  {formatTime(result.scene.start_timestamp)} &ndash;{" "}
+                  {formatTime(result.scene.end_timestamp)}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-900 text-blue-300">
+                  {(result.similarity * 100).toFixed(0)}% match
                 </span>
                 <span
                   className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                    scene.overall_confidence >= 0.8
+                    result.scene.overall_confidence >= 0.8
                       ? "bg-green-900 text-green-300"
-                      : scene.overall_confidence >= 0.5
+                      : result.scene.overall_confidence >= 0.5
                         ? "bg-yellow-900 text-yellow-300"
                         : "bg-red-900 text-red-300"
                   }`}
                 >
-                  {(scene.overall_confidence * 100).toFixed(0)}%
+                  {(result.scene.overall_confidence * 100).toFixed(0)}% conf
                 </span>
               </div>
 
               {/* Characters */}
-              {scene.characters_present.length > 0 && (
-                <div className="flex gap-1 mb-1">
-                  {scene.characters_present.map((c) => (
+              {(result.scene.characters_present ?? []).length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-1">
+                  {result.scene.characters_present.map((c) => (
                     <span
                       key={c.name}
                       className="bg-gray-800 text-gray-300 px-2 py-0.5 rounded text-xs"
@@ -103,18 +106,18 @@ export default function SearchPage() {
               )}
 
               {/* Dialog snippet */}
-              {scene.key_dialog.length > 0 && (
+              {(result.scene.key_dialog ?? []).length > 0 && (
                 <p className="text-sm text-gray-300 truncate">
                   <span className="text-simpsons-yellow">
-                    {scene.key_dialog[0].speaker}:
+                    {result.scene.key_dialog[0].speaker}:
                   </span>{" "}
-                  &ldquo;{scene.key_dialog[0].exact_quote}&rdquo;
+                  &ldquo;{result.scene.key_dialog[0].exact_quote || result.scene.key_dialog[0].quote}&rdquo;
                 </p>
               )}
 
-              {scene.description_text && (
+              {result.scene.description_text && (
                 <p className="text-sm text-gray-500 mt-1 truncate">
-                  {scene.description_text}
+                  {result.scene.description_text}
                 </p>
               )}
 
