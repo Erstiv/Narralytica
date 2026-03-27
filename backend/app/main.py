@@ -16,7 +16,7 @@ app.add_middleware(
         "http://localhost:3002",
         "http://localhost:3001",
         "http://localhost:3000",
-        "https://narralytica.capainofindustries.com",
+        "https://captainofindustries.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
