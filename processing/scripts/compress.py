@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Narrowlitics: Video Compression Script (Run on M5 Mac)
+Narralytica: Video Compression Script (Run on M5 Mac)
 
 Compresses a video file for Gemini analysis.
 Target: 720p, 1 FPS, H.264 CRF 25, AAC 128kbps

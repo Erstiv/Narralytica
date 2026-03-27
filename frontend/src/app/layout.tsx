@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Narrowlitics",
+  title: "Narralytica",
   description: "Natural-Language Video Intelligence Platform",
 };
 
@@ -18,7 +18,7 @@ export default function RootLayout({
           <nav className="border-b border-gray-800 bg-gray-900/50 backdrop-blur">
             <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
               <a href="/" className="text-xl font-bold text-simpsons-yellow">
-                Narrowlitics
+                Narralytica
               </a>
               <div className="flex gap-6 text-sm">
                 <a href="/" className="hover:text-simpsons-yellow transition">

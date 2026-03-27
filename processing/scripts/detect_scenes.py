@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Narrowlitics: Scene Detection Script (Run on M5 Mac)
+Narralytica: Scene Detection Script (Run on M5 Mac)
 
 Uses PySceneDetect to find scene boundaries in a video.
 Outputs a JSON file with timestamp pairs that become Gemini analysis anchors.

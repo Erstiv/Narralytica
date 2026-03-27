@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Narrowlitics: Gemini Video Indexing (Run on M5 Mac)
+Narralytica: Gemini Video Indexing (Run on M5 Mac)
 
 Uploads compressed video to Gemini, then analyzes each scene to produce
-structured JSON matching the Narrowlitics Scene model.
+structured JSON matching the Narralytica Scene model.
 
 Usage:
     export GEMINI_API_KEY=your_key_here

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Narrowlitics: Generate Vector Embeddings (Run on M5 Mac)
+Narralytica: Generate Vector Embeddings (Run on M5 Mac)
 
 Takes the Gemini analysis JSON and generates 768-dim text embeddings
 for each scene's description_text using Gemini's text-embedding-004 model.

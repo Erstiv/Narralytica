@@ -1,4 +1,4 @@
--- Narrowlitics: Initial schema with pgvector
+-- Narralytica: Initial schema with pgvector
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Shows table (extensible beyond Simpsons)

@@ -1,5 +1,5 @@
 """
-Narrowlitics: Embedding utility for search-time query embedding.
+Narralytica: Embedding utility for search-time query embedding.
 
 Uses Gemini text-embedding-004 (768 dims) to embed search queries.
 The same model used at indexing time (generate_embeddings.py on M5 Mac).

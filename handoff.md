@@ -1,18 +1,18 @@
-# Narrowlitics Handoff — Phase 1 Complete
+# Narralytica Handoff — Phase 1 Complete
 
 ## What's Done
 
-Narrowlitics is live at **https://captainofindustries.com** with all 4 Docker containers running on Hetzner (178.156.251.26, SSH alias: `filou`).
+Narralytica is live at **https://captainofindustries.com** with all 4 Docker containers running on Hetzner (178.156.251.26, SSH alias: `filou`).
 
-### Architecture on Hetzner (`/var/www/narrowlitics/`)
-- **narrowlitics-frontend**: Next.js 15, port 3020 → proxied through nginx
-- **narrowlitics-backend**: FastAPI, port 8005 → proxied at `/api/`
-- **narrowlitics-db**: PostgreSQL 16 + pgvector, port 5433
-- **narrowlitics-worker**: Celery (stub, ready for Phase 2 tasks)
+### Architecture on Hetzner (`/var/www/narralytica/`)
+- **narralytica-frontend**: Next.js 15, port 3020 → proxied through nginx
+- **narralytica-backend**: FastAPI, port 8005 → proxied at `/api/`
+- **narralytica-db**: PostgreSQL 16 + pgvector, port 5433
+- **narralytica-worker**: Celery (stub, ready for Phase 2 tasks)
 - **Nginx**: SSL via Let's Encrypt, auto-renewing
 
 ### GitHub
-Repo: https://github.com/Erstiv/Narrowlitics — all code is there.
+Repo: https://github.com/Erstiv/Narralytica — all code is there.
 
 ### Frontend Pages (all working)
 - `/` — Dashboard (shows episode pipeline status, quick stats)
@@ -47,20 +47,20 @@ Pre-seeded with The Simpsons show + S04E17 "Last Exit to Springfield" (status: p
 
 Elliot has the key but needs help adding it to the `.env` file on Hetzner.
 
-The file is at `/var/www/narrowlitics/.env` on the server (SSH alias: `filou`).
+The file is at `/var/www/narralytica/.env` on the server (SSH alias: `filou`).
 
 The line to update is `GEMINI_API_KEY=` — put the key after the equals sign.
 
 After updating, restart the backend:
 ```bash
-ssh filou "cd /var/www/narrowlitics && docker compose restart narrowlitics-backend narrowlitics-worker"
+ssh filou "cd /var/www/narralytica && docker compose restart narralytica-backend narralytica-worker"
 ```
 
 ### Step 2: Get the Simpsons Episode to M5 Mac
 
 The episode file lives on Elliot's local Plex server. He needs to:
 1. Find the file on Plex (likely an `.mkv` in Plex's media directory)
-2. Copy it to somewhere on the M5 Mac (e.g., `~/narrowlitics/input/`)
+2. Copy it to somewhere on the M5 Mac (e.g., `~/narralytica/input/`)
 
 Plex media is typically stored in a path like `/Volumes/...` or wherever Elliot configured it. He may need help locating the exact file path.
 
@@ -70,7 +70,7 @@ The compression script is in the repo. Elliot needs to:
 
 1. Clone the repo on the M5 Mac (if not already):
 ```bash
-git clone https://github.com/Erstiv/Narrowlitics.git ~/narrowlitics
+git clone https://github.com/Erstiv/Narralytica.git ~/narralytica
 ```
 
 2. Make sure FFmpeg is installed:
@@ -80,7 +80,7 @@ brew install ffmpeg
 
 3. Run the compression script:
 ```bash
-cd ~/narrowlitics
+cd ~/narralytica
 python3 processing/scripts/compress.py /path/to/simpsons_s04e17.mkv processing/output/compressed.mp4
 ```
 
@@ -102,9 +102,21 @@ This outputs a JSON file with start/end timestamps for each scene.
 
 ---
 
-## Phase 2 Preview (After Steps 1-4)
+## Phase 1 Status: COMPLETE (2026-03-26)
 
-Once scenes are detected and the Gemini key is set:
+All 4 steps done from M5 Mac:
+- ✅ Gemini API key added to `/var/www/narralytica/.env` on Hetzner, backend + worker restarted
+- ✅ Episode located on Plex (`ssh plex`, chaos drive): `Simpsons 04x17 - Last Exit to Springfield .ogm`
+- ✅ Episode copied to M5 Mac: `~/narralytica/input/simpsons_s04e17.ogm` (175.5 MB)
+- ✅ Compressed to `~/narralytica/processing/output/compressed.mp4` (80.9 MB, 720p 1fps)
+- ✅ Scene detection: `~/narralytica/processing/output/scenes.json` — 9 scenes (17s–892s, avg 154s)
+- ✅ Homebrew reinstalled for ARM (was broken Intel version), FFmpeg 8.1, PySceneDetect 0.6.7.1
+
+Note: The 892s longest scene suggests the detection threshold (27.0) may need tuning in Phase 2.
+
+## Phase 2: Ready to Start
+
+Now that scenes are detected and the Gemini key is set:
 1. Build the Gemini indexing script (upload compressed video, get structured scene JSON)
 2. Generate vector embeddings for each scene description
 3. Wire up the bulk ingest endpoint to store everything in Postgres
@@ -116,6 +128,6 @@ Once scenes are detected and the Gemini key is set:
 - **NEVER kill processes** without being explicitly asked
 - Use `systemctl` for service management
 - Prefer Python file-write scripts over heredoc blocks (heredocs break with Jinja2)
-- Push to GitHub regularly: `github.com/Erstiv/Narrowlitics`
+- Push to GitHub regularly: `github.com/Erstiv/Narralytica`
 - Elliot is a beginner with server management — explain commands clearly
 - Port map: backend=8005, frontend=3020, db=5433
