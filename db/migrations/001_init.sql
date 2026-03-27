@@ -46,7 +46,7 @@ CREATE TABLE scenes (
     motivations_feelings TEXT,
     overall_confidence FLOAT DEFAULT 0,
     thumbnail_path TEXT,
-    description_embedding vector(768),           -- for pgvector similarity search
+    description_embedding vector(1536),           -- for pgvector similarity search
     description_text TEXT,                        -- human-readable scene summary
     raw_gemini_json JSONB,                        -- preserve full Gemini response
     created_at TIMESTAMPTZ DEFAULT NOW()

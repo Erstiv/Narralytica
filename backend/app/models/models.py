@@ -62,7 +62,7 @@ class Scene(Base):
     motivations_feelings = Column(Text)
     overall_confidence = Column(Float, default=0)
     thumbnail_path = Column(Text)
-    description_embedding = Column(Vector(768))
+    description_embedding = Column(Vector(1536))
     description_text = Column(Text)
     merged_transcript = Column(JSON, default=[])
     raw_gemini_json = Column(JSON)

@@ -1,14 +1,15 @@
 """
 Narralytica: Embedding utility for search-time query embedding.
 
-Uses Gemini gemini-embedding-001 (truncated to 768 dims) to embed search queries.
-The same model used at indexing time (generate_embeddings.py on M5 Mac).
+Uses Google text-embedding-004 (1,536 dims) to embed search queries.
+The same model used at indexing time (generate_embeddings.py on processing server).
+Stays in the Google ecosystem with multilingual support.
 """
 from google import genai
 from app.core.config import settings
 
-EMBEDDING_MODEL = "gemini-embedding-001"
-OUTPUT_DIMS = 768
+EMBEDDING_MODEL = "text-embedding-004"
+OUTPUT_DIMS = 1536
 
 _client = None
 
@@ -21,7 +22,7 @@ def _get_client() -> genai.Client:
 
 
 async def embed_query(text: str) -> list[float]:
-    """Generate a 768-dim embedding for a search query.
+    """Generate a 1536-dim embedding for a search query.
 
     Uses RETRIEVAL_QUERY task type (complementary to RETRIEVAL_DOCUMENT
     used at index time) for optimal search relevance.
