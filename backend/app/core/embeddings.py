@@ -1,13 +1,14 @@
 """
 Narralytica: Embedding utility for search-time query embedding.
 
-Uses Gemini text-embedding-004 (768 dims) to embed search queries.
+Uses Gemini gemini-embedding-001 (truncated to 768 dims) to embed search queries.
 The same model used at indexing time (generate_embeddings.py on M5 Mac).
 """
 from google import genai
 from app.core.config import settings
 
-EMBEDDING_MODEL = "text-embedding-004"
+EMBEDDING_MODEL = "gemini-embedding-001"
+OUTPUT_DIMS = 768
 
 _client = None
 
@@ -29,6 +30,6 @@ async def embed_query(text: str) -> list[float]:
     result = client.models.embed_content(
         model=EMBEDDING_MODEL,
         contents=text,
-        config={"task_type": "RETRIEVAL_QUERY"},
+        config={"task_type": "RETRIEVAL_QUERY", "output_dimensionality": OUTPUT_DIMS},
     )
     return result.embeddings[0].values

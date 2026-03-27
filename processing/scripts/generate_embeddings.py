@@ -20,8 +20,9 @@ import argparse
 from google import genai
 
 
-EMBEDDING_MODEL = "text-embedding-004"  # 768 dimensions
+EMBEDDING_MODEL = "gemini-embedding-001"  # Supports output_dimensionality truncation
 TASK_TYPE = "RETRIEVAL_DOCUMENT"  # Optimized for document storage (vs RETRIEVAL_QUERY for search)
+OUTPUT_DIMS = 768  # Match pgvector column: vector(768)
 
 
 def build_embedding_text(scene: dict) -> str:
@@ -66,7 +67,7 @@ def generate_embedding(client: genai.Client, text: str) -> list[float]:
     result = client.models.embed_content(
         model=EMBEDDING_MODEL,
         contents=text,
-        config={"task_type": TASK_TYPE},
+        config={"task_type": TASK_TYPE, "output_dimensionality": OUTPUT_DIMS},
     )
     return result.embeddings[0].values
 
