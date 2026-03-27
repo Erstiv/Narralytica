@@ -59,6 +59,11 @@ def build_embedding_text(scene: dict) -> str:
     if scene.get("background"):
         parts.append(f"Setting: {scene['background']}")
 
+    if scene.get("objects_present"):
+        obj_names = [o["name"] for o in scene["objects_present"] if isinstance(o, dict)]
+        if obj_names:
+            parts.append(f"Objects: {', '.join(obj_names)}")
+
     return " ".join(parts)
 
 

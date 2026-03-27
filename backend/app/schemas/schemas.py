@@ -53,13 +53,26 @@ class SceneOut(BaseModel):
     overall_confidence: float
     thumbnail_path: str | None
     description_text: str | None
+    merged_transcript: list | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
+class SceneObjectOut(BaseModel):
+    id: int
+    scene_id: int
+    name: str
+    category: str
+    prominence: str | None
+    confidence: float | None
+    first_appearance_timestamp: float | None
+
+    model_config = {"from_attributes": True}
+
+
 class SceneBulkCreate(BaseModel):
-    """For ingesting Gemini output directly."""
+    """For ingesting Gemini + Whisper merged output."""
     scenes: list[dict]
 
 

@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.models import Scene
+from app.models.models import Scene, SceneObject
 from app.schemas.schemas import SceneOut, SceneBulkCreate
 
 router = APIRouter(prefix="/scenes", tags=["scenes"])
@@ -62,9 +62,24 @@ async def bulk_create_scenes(
             overall_confidence=scene_data.get("overall_scene_confidence", 0),
             description_text=scene_data.get("description_text"),
             description_embedding=embedding,
+            merged_transcript=scene_data.get("merged_transcript", []),
             raw_gemini_json=scene_data,
         )
         db.add(scene)
+        await db.flush()  # Get scene.id for objects
+
+        # Create scene_objects from objects_present
+        for obj in scene_data.get("objects_present", []):
+            if isinstance(obj, dict):
+                db.add(SceneObject(
+                    scene_id=scene.id,
+                    name=obj.get("name", ""),
+                    category=obj.get("category", ""),
+                    prominence=obj.get("prominence"),
+                    confidence=obj.get("confidence"),
+                    first_appearance_timestamp=obj.get("first_appearance_timestamp"),
+                ))
+
         created += 1
 
     await db.commit()

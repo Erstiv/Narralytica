@@ -64,10 +64,26 @@ class Scene(Base):
     thumbnail_path = Column(Text)
     description_embedding = Column(Vector(768))
     description_text = Column(Text)
+    merged_transcript = Column(JSON, default=[])
     raw_gemini_json = Column(JSON)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     episode = relationship("Episode", back_populates="scenes")
+    objects = relationship("SceneObject", back_populates="scene", cascade="all, delete-orphan")
+
+
+class SceneObject(Base):
+    __tablename__ = "scene_objects"
+
+    id = Column(Integer, primary_key=True)
+    scene_id = Column(Integer, ForeignKey("scenes.id", ondelete="CASCADE"))
+    name = Column(Text, nullable=False)
+    category = Column(Text, nullable=False)
+    prominence = Column(Text)
+    confidence = Column(Float)
+    first_appearance_timestamp = Column(Float)
+
+    scene = relationship("Scene", back_populates="objects")
 
 
 class Tweak(Base):

@@ -45,6 +45,10 @@ Return a JSON object with EXACTLY these fields:
   "background": "Setting description - where the scene takes place",
   "scene_transitions": "How the scene starts and ends (cut, fade, etc.)",
   "motivations_feelings": "What characters want and feel in this scene",
+  "objects_present": [
+    {{"name": "donut", "category": "food", "prominence": "foreground", "confidence": 0.95, "first_appearance_timestamp": 142.5}},
+    {{"name": "nuclear reactor control panel", "category": "setting_element", "prominence": "background", "confidence": 0.88, "first_appearance_timestamp": 140.0}}
+  ],
   "overall_scene_confidence": 0.85,
   "description_text": "A comprehensive 2-3 sentence natural language summary of this entire scene, suitable for semantic search. Include who is present, what happens, the emotional tone, and any memorable moments."
 }}
@@ -55,6 +59,7 @@ Rules:
 - description_text should be rich and searchable (this powers the search engine)
 - Be specific about Simpsons characters by full name
 - If you can't see the scene clearly, lower the confidence values
+- objects_present: Tag every notable object. Categories: food, vehicle, setting_element, prop, signage, animal, clothing, document. Prominence: foreground, midground, background.
 """
 
 

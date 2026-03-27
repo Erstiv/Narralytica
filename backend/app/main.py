@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api import episodes, scenes, search
+from app.api import episodes, scenes, search, exports
 
 app = FastAPI(
     title="Narralytica API",
@@ -26,6 +26,7 @@ app.add_middleware(
 app.include_router(episodes.router, prefix="/api")
 app.include_router(scenes.router, prefix="/api")
 app.include_router(search.router, prefix="/api")
+app.include_router(exports.router, prefix="/api")
 
 
 @app.get("/api/health")
