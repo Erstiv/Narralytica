@@ -194,8 +194,19 @@ async def import_show_from_sonarr(
 @router.get("/shows")
 async def list_shows(db: AsyncSession = Depends(get_db)):
     """List all shows in Narralytica."""
+    from sqlalchemy import func as sqlfunc
     result = await db.execute(select(Show).order_by(Show.name))
     shows = result.scalars().all()
+
+    # Count episodes per show without lazy loading
+    ep_counts = {}
+    count_result = await db.execute(
+        select(Episode.show_id, sqlfunc.count(Episode.id))
+        .group_by(Episode.show_id)
+    )
+    for show_id, count in count_result.all():
+        ep_counts[show_id] = count
+
     return [
         {
             "id": s.id,
@@ -206,7 +217,7 @@ async def list_shows(db: AsyncSession = Depends(get_db)):
             "poster_url": s.poster_url,
             "fanart_url": s.fanart_url,
             "sonarr_id": s.sonarr_id,
-            "episode_count": len(s.episodes) if s.episodes else 0,
+            "episode_count": ep_counts.get(s.id, 0),
         }
         for s in shows
     ]
