@@ -119,73 +119,116 @@ async def import_show_from_sonarr(
     records for every episode that has a file on disk. Does NOT start
     the processing pipeline — that's a separate step.
     """
-    # Check if already imported
-    existing = await db.execute(select(Show).where(Show.sonarr_id == sonarr_id))
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Show already imported from Sonarr")
-
     # Fetch full show data from Sonarr
     series_list = await _sonarr_get("/series")
     series = next((s for s in series_list if s["id"] == sonarr_id), None)
     if not series:
         raise HTTPException(status_code=404, detail=f"Sonarr series {sonarr_id} not found")
 
-    # Create show
+    # Check if already imported by sonarr_id OR matching name
+    existing_by_sonarr = await db.execute(select(Show).where(Show.sonarr_id == sonarr_id))
+    existing_by_name = await db.execute(select(Show).where(Show.name == series["title"]))
+    show = existing_by_sonarr.scalar_one_or_none() or existing_by_name.scalar_one_or_none()
+
     ratings = series.get("ratings", {})
-    show = Show(
-        name=series["title"],
-        year=series.get("year"),
-        network=series.get("network"),
-        overview=series.get("overview"),
-        genres=series.get("genres", []),
-        sonarr_id=sonarr_id,
-        tvdb_id=series.get("tvdbId"),
-        poster_url=_extract_image(series.get("images", []), "poster"),
-        fanart_url=_extract_image(series.get("images", []), "fanart"),
-        banner_url=_extract_image(series.get("images", []), "banner"),
-        clearlogo_url=_extract_image(series.get("images", []), "clearlogo"),
-        media_path=series.get("path"),
-        rating_value=ratings.get("value"),
-        rating_votes=ratings.get("votes"),
-        theme_config={},
-    )
-    db.add(show)
-    await db.flush()  # Get show.id
+    is_update = show is not None
+
+    if show:
+        # Update existing show with Sonarr metadata
+        show.sonarr_id = sonarr_id
+        show.tvdb_id = series.get("tvdbId")
+        show.year = series.get("year")
+        show.network = series.get("network")
+        show.overview = series.get("overview")
+        show.genres = series.get("genres", [])
+        show.poster_url = _extract_image(series.get("images", []), "poster")
+        show.fanart_url = _extract_image(series.get("images", []), "fanart")
+        show.banner_url = _extract_image(series.get("images", []), "banner")
+        show.clearlogo_url = _extract_image(series.get("images", []), "clearlogo")
+        show.media_path = series.get("path")
+        show.rating_value = ratings.get("value")
+        show.rating_votes = ratings.get("votes")
+    else:
+        # Create new show
+        show = Show(
+            name=series["title"],
+            year=series.get("year"),
+            network=series.get("network"),
+            overview=series.get("overview"),
+            genres=series.get("genres", []),
+            sonarr_id=sonarr_id,
+            tvdb_id=series.get("tvdbId"),
+            poster_url=_extract_image(series.get("images", []), "poster"),
+            fanart_url=_extract_image(series.get("images", []), "fanart"),
+            banner_url=_extract_image(series.get("images", []), "banner"),
+            clearlogo_url=_extract_image(series.get("images", []), "clearlogo"),
+            media_path=series.get("path"),
+            rating_value=ratings.get("value"),
+            rating_votes=ratings.get("votes"),
+            theme_config={},
+        )
+        db.add(show)
+    await db.flush()
 
     # Fetch episodes from Sonarr
     sonarr_episodes = await _sonarr_get(f"/episode?seriesId={sonarr_id}")
 
+    # Get existing episodes for this show to avoid duplicates
+    existing_eps = await db.execute(
+        select(Episode).where(Episode.show_id == show.id)
+    )
+    existing_map = {
+        (ep.season, ep.episode_number): ep
+        for ep in existing_eps.scalars().all()
+    }
+
     episodes_created = 0
+    episodes_updated = 0
     for ep in sonarr_episodes:
         if ep.get("seasonNumber", 0) == 0:
             continue  # Skip specials
 
-        episode = Episode(
-            show_id=show.id,
-            title=ep.get("title", f"Episode {ep.get('episodeNumber', '?')}"),
-            season=ep["seasonNumber"],
-            episode_number=ep["episodeNumber"],
-            air_date=ep.get("airDate"),
-            overview=ep.get("overview"),
-            sonarr_episode_id=ep["id"],
-            duration_seconds=ep.get("runtime", 0) * 60 if ep.get("runtime") else None,
-            file_path=ep.get("episodeFile", {}).get("path") if ep.get("episodeFile") else None,
-            status="pending",
-        )
-        db.add(episode)
-        episodes_created += 1
+        key = (ep["seasonNumber"], ep["episodeNumber"])
+        if key in existing_map:
+            # Update existing episode with Sonarr metadata
+            existing_ep = existing_map[key]
+            existing_ep.air_date = ep.get("airDate")
+            existing_ep.overview = ep.get("overview")
+            existing_ep.sonarr_episode_id = ep["id"]
+            if not existing_ep.file_path and ep.get("episodeFile"):
+                existing_ep.file_path = ep["episodeFile"].get("path")
+            if not existing_ep.duration_seconds and ep.get("runtime"):
+                existing_ep.duration_seconds = ep["runtime"] * 60
+            episodes_updated += 1
+        else:
+            episode = Episode(
+                show_id=show.id,
+                title=ep.get("title", f"Episode {ep.get('episodeNumber', '?')}"),
+                season=ep["seasonNumber"],
+                episode_number=ep["episodeNumber"],
+                air_date=ep.get("airDate"),
+                overview=ep.get("overview"),
+                sonarr_episode_id=ep["id"],
+                duration_seconds=ep.get("runtime", 0) * 60 if ep.get("runtime") else None,
+                file_path=ep.get("episodeFile", {}).get("path") if ep.get("episodeFile") else None,
+                status="pending",
+            )
+            db.add(episode)
+            episodes_created += 1
 
     await db.commit()
     await db.refresh(show)
 
+    action = "Updated" if is_update else "Imported"
     return {
         "show_id": show.id,
         "name": show.name,
         "sonarr_id": show.sonarr_id,
         "episodes_created": episodes_created,
+        "episodes_updated": episodes_updated,
         "poster_url": show.poster_url,
         "fanart_url": show.fanart_url,
-        "message": f"Imported '{show.name}' with {episodes_created} episodes",
+        "message": f"{action} '{show.name}': {episodes_created} new, {episodes_updated} updated",
     }
 
 
