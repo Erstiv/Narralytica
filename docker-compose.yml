@@ -32,6 +32,13 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key}
       ENVIRONMENT: ${ENVIRONMENT:-development}
+      SONARR_URL: http://host.docker.internal:8989
+      SONARR_API_KEY: ${SONARR_API_KEY:-}
+      RADARR_URL: http://host.docker.internal:7878
+      RADARR_API_KEY: ${RADARR_API_KEY:-}
+      PLEX_PROCESSING_URL: ${PLEX_PROCESSING_URL:-http://100.108.190.10:8006}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8005:8005"
     volumes:
