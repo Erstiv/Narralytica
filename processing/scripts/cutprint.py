@@ -47,6 +47,12 @@ except ImportError:
     print("ERROR: pip install 'scenedetect[opencv]'")
     sys.exit(1)
 
+# Ensure Homebrew binaries are on PATH (macOS)
+if sys.platform == "darwin":
+    for brew_path in ["/usr/local/bin", "/opt/homebrew/bin"]:
+        if brew_path not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = brew_path + ":" + os.environ.get("PATH", "")
+
 
 # Genre presets — starting points for calibration
 GENRE_PRESETS = {
