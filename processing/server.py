@@ -150,23 +150,23 @@ def run_pipeline(job_id: str, request: JobRequest):
     python = sys.executable
 
     try:
-        # Step 1: Compress
+        # Step 1: Compress (positional args: input output)
         job["current_step"] = "compress"
         job["progress_pct"] = 0
         result = subprocess.run(
             [python, str(scripts_dir / "compress.py"),
-             request.video_path, "--output", str(compressed)],
+             request.video_path, str(compressed)],
             capture_output=True, text=True, env=env
         )
         if result.returncode != 0:
             raise RuntimeError(f"Compress failed: {result.stderr[:500]}")
 
-        # Step 2: Detect scenes
+        # Step 2: Detect scenes (positional args: video output [threshold])
         job["current_step"] = "detect"
         job["progress_pct"] = 15
         result = subprocess.run(
             [python, str(scripts_dir / "detect_scenes.py"),
-             str(compressed), "--output", str(scenes_json)],
+             str(compressed), str(scenes_json)],
             capture_output=True, text=True, env=env
         )
         if result.returncode != 0:
@@ -181,7 +181,8 @@ def run_pipeline(job_id: str, request: JobRequest):
         def run_whisper():
             return subprocess.run(
                 [python, str(scripts_dir / "whisper_transcribe.py"),
-                 request.video_path, "--output", str(whisper_json)],
+                 request.video_path,
+                 "--output", str(whisper_json)],
                 capture_output=True, text=True, env=env
             )
 
