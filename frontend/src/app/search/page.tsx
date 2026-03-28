@@ -330,6 +330,21 @@ function DownloadMenu({ sceneId, episodeId }: { sceneId: number; episodeId: numb
           >
             Script DOCX
           </a>
+          <a
+            href={`${API_URL}/api/export/${episodeId}/vtt`}
+            className="block px-3 py-1.5 text-xs hover:bg-gray-700 transition"
+            onClick={() => setOpen(false)}
+          >
+            VTT Subtitles
+          </a>
+          <hr className="border-gray-700 my-1" />
+          <a
+            href={`${API_URL}/api/export/${episodeId}/metadata-pdf`}
+            className="block px-3 py-1.5 text-xs hover:bg-gray-700 transition text-simpsons-yellow font-medium"
+            onClick={() => setOpen(false)}
+          >
+            Metadata Script PDF
+          </a>
         </div>
       )}
     </div>
