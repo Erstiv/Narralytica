@@ -74,7 +74,8 @@ async def start_processing(
     # /Volumes/Chaos/ and /Volumes/Luchagaido/ automatically.
     job = await _plex_request("POST", "/jobs", json={
         "episode_id": episode.id,
-        "video_path": "",  # Let Plex server resolve
+        "show_id": show.id,
+        "video_path": "",  # Let Plex server resolve from filesystem
         "api_url": "http://100.71.72.6:8005",  # Hetzner's Tailscale IP
         "show_name": show.name,
         "season": episode.season,
@@ -89,7 +90,6 @@ async def start_processing(
         "episode_id": episode.id,
         "episode_title": episode.title,
         "job_id": job.get("job_id"),
-        "video_path": video_path,
         "message": f"Processing started for S{episode.season:02d}E{episode.episode_number:02d} '{episode.title}'",
     }
 
