@@ -71,7 +71,7 @@ async def bulk_create_scenes(
             scene_composition=scene_data.get("scene_composition"),
             visual_style_notes=scene_data.get("visual_style_notes"),
             # Audio & Music
-            music_present=scene_data.get("music_present"),
+            music_present=bool(scene_data.get("music_present")) if scene_data.get("music_present") is not None else None,
             music_description=scene_data.get("music_description"),
             sound_effects=scene_data.get("sound_effects"),
             ambient_audio=scene_data.get("ambient_audio"),

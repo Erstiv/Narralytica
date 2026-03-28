@@ -96,7 +96,7 @@ class Scene(Base):
     visual_style_notes = Column(Text)
 
     # Audio & Music
-    music_present = Column(JSON)                          # Boolean stored as JSON for null safety
+    music_present = Column(Boolean)                        # True/false for music in scene
     music_description = Column(Text)
     sound_effects = Column(Text)
     ambient_audio = Column(Text)
