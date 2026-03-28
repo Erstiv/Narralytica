@@ -378,3 +378,105 @@ export const deleteTweak = (id: number) =>
 
 export const getVoicePresets = () =>
   fetchAPI<{ voices: VoicePreset[] }>("/tweaks/voices/presets");
+
+// --- Analytics (Stage H) ---
+export interface MoodTimelineEntry {
+  scene_id: number;
+  start: number;
+  end: number;
+  duration: number;
+  tone: string | null;
+  tone_intensity: number;
+  mood: string | null;
+  pacing: string | null;
+  pacing_speed: number;
+  location: string | null;
+  characters: string[];
+  explicitness: Record<string, number>;
+  music_present: boolean | null;
+  plot_significance: string | null;
+}
+
+export interface ScreenTimeChar {
+  name: string;
+  total_seconds: number;
+  total_formatted: string;
+  episodes: Record<string, number>;
+}
+
+export interface SceneDNA {
+  scene_id: number;
+  dimensions: Record<string, number>;
+  metadata: {
+    tone: string | null;
+    pacing: string | null;
+    location: string | null;
+    characters: string[];
+    plot_significance: string | null;
+    confidence: number;
+  };
+}
+
+export interface DialogResult {
+  scene_id: number;
+  episode_id: number;
+  episode_label: string;
+  episode_title: string;
+  start_timestamp: number;
+  location: string | null;
+  matching_lines: { speaker: string; quote: string; timestamp: number | null }[];
+}
+
+export interface SimilarScene {
+  scene_id: number;
+  episode_id: number;
+  episode_label: string;
+  episode_title: string;
+  similarity: number;
+  location: string | null;
+  tone: string | null;
+  characters: string[];
+  description: string;
+  start_timestamp: number;
+}
+
+export interface EpisodeOverview {
+  episode_id: number;
+  show_name: string;
+  episode_title: string;
+  episode_label: string;
+  scene_count: number;
+  total_duration: number;
+  total_dialog_lines: number;
+  unique_characters: number;
+  top_characters: [string, number][];
+  tone_distribution: Record<string, number>;
+  location_count: number;
+  top_locations: [string, number][];
+}
+
+export const getMoodTimeline = (episodeId: number) =>
+  fetchAPI<{ episode_id: number; scene_count: number; timeline: MoodTimelineEntry[] }>(
+    `/analytics/mood-timeline/${episodeId}`
+  );
+
+export const getScreenTime = (showId: number, season?: number) =>
+  fetchAPI<{ show_id: number; season: number | null; characters: ScreenTimeChar[] }>(
+    `/analytics/screen-time/${showId}${season ? `?season=${season}` : ""}`
+  );
+
+export const getSceneDNA = (sceneId: number) =>
+  fetchAPI<SceneDNA>(`/analytics/scene-dna/${sceneId}`);
+
+export const dialogSearch = (q: string, showId?: number) =>
+  fetchAPI<{ query: string; count: number; results: DialogResult[] }>(
+    `/analytics/dialog-search?q=${encodeURIComponent(q)}${showId ? `&show_id=${showId}` : ""}`
+  );
+
+export const getSimilarScenes = (sceneId: number) =>
+  fetchAPI<{ source_scene_id: number; similar: SimilarScene[] }>(
+    `/analytics/similar/${sceneId}`
+  );
+
+export const getEpisodeOverview = (episodeId: number) =>
+  fetchAPI<EpisodeOverview>(`/analytics/episode-overview/${episodeId}`);
