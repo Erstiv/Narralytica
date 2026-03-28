@@ -48,11 +48,55 @@ jobs: dict[str, dict] = {}
 class JobRequest(BaseModel):
     """Request to process an episode."""
     episode_id: int
-    video_path: str              # Absolute path on Plex Mac filesystem
+    video_path: str = ""         # Absolute path on Plex Mac filesystem (optional if show/season/ep provided)
     api_url: str = "http://178.156.251.26:8005"  # Hetzner API URL
     show_name: str = ""
     season: int = 0
     episode_number: int = 0
+
+
+# Media search paths on Plex Mac (ordered by preference)
+PLEX_TV_PATHS = [
+    "/Volumes/Luchagaido/TV Shows",
+    "/Volumes/Chaos/TV Shows",
+]
+
+
+def find_episode_file(show_name: str, season: int, episode_number: int) -> str | None:
+    """Search Plex Mac filesystem for an episode file.
+
+    Looks through all configured TV paths for files matching the show,
+    season, and episode number. Handles various naming conventions.
+    """
+    import glob
+    import re
+
+    for base in PLEX_TV_PATHS:
+        show_dir = Path(base) / show_name
+        if not show_dir.exists():
+            continue
+
+        # Check season directories
+        for season_dir_name in [f"Season {season:02d}", f"Season {season}"]:
+            season_dir = show_dir / season_dir_name
+            if not season_dir.exists():
+                continue
+
+            # Search for files matching this episode number
+            for f in season_dir.iterdir():
+                if f.is_file() and f.suffix.lower() in ('.mkv', '.mp4', '.avi', '.ogm', '.ts', '.m4v'):
+                    name = f.name.lower()
+                    # Match patterns: S04E17, 04x17, s4e17, etc.
+                    patterns = [
+                        rf's0*{season}e0*{episode_number}\b',
+                        rf'0*{season}x0*{episode_number}\b',
+                        rf'[- .]0*{episode_number}[- .]',
+                    ]
+                    for pattern in patterns:
+                        if re.search(pattern, name, re.IGNORECASE):
+                            return str(f)
+
+    return None
 
 
 class JobStatus(BaseModel):
@@ -240,8 +284,20 @@ async def health():
 @app.post("/jobs")
 async def create_job(request: JobRequest):
     """Start a new processing job."""
+    # If no explicit path, search for the file by show/season/episode
+    if not request.video_path and request.show_name and request.season and request.episode_number:
+        found = find_episode_file(request.show_name, request.season, request.episode_number)
+        if found:
+            request.video_path = found
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Could not find {request.show_name} S{request.season:02d}E{request.episode_number:02d} "
+                       f"on disk. Searched: {', '.join(PLEX_TV_PATHS)}"
+            )
+
     # Validate video path exists
-    if not Path(request.video_path).exists():
+    if not request.video_path or not Path(request.video_path).exists():
         raise HTTPException(
             status_code=400,
             detail=f"Video file not found: {request.video_path}"

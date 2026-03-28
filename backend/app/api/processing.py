@@ -69,23 +69,13 @@ async def start_processing(
             detail="Episode has no file path. Import from Sonarr first or set the path manually."
         )
 
-    # The file_path from Sonarr is relative to the Hetzner download dir
-    # (/data/media/tv/...). On the Plex Mac, the same content is at
-    # /Volumes/Chaos/TV Shows/... or /Volumes/Luchagaido/TV Shows/...
-    # We need to translate the path.
-    video_path = episode.file_path
-    if video_path.startswith("/data/media/tv/"):
-        # Try both Plex Mac mount points
-        relative = video_path[len("/data/media/tv/"):]
-        # Luchagaido gets new content, Chaos has legacy
-        video_path = f"/Volumes/Luchagaido/TV Shows/{relative}"
-        # TODO: Add fallback to /Volumes/Chaos/TV Shows/ if not found
-
-    # Send job to Plex processing server
+    # Let the Plex processing server find the file itself using
+    # show name + season + episode number. It searches both
+    # /Volumes/Chaos/ and /Volumes/Luchagaido/ automatically.
     job = await _plex_request("POST", "/jobs", json={
         "episode_id": episode.id,
-        "video_path": video_path,
-        "api_url": f"http://100.71.72.6:8005",  # Hetzner's Tailscale IP
+        "video_path": "",  # Let Plex server resolve
+        "api_url": "http://100.71.72.6:8005",  # Hetzner's Tailscale IP
         "show_name": show.name,
         "season": episode.season,
         "episode_number": episode.episode_number,
