@@ -68,19 +68,13 @@ async def start_processing(
 
     episode, show = row
 
-    if not episode.file_path:
-        raise HTTPException(
-            status_code=400,
-            detail="Episode has no file path. Import from Sonarr first or set the path manually."
-        )
-
-    # Let the Plex processing server find the file itself using
-    # show name + season + episode number. It searches both
-    # /Volumes/Chaos/ and /Volumes/Luchagaido/ automatically.
+    # Send the file path + show/episode info to the Plex server.
+    # If file_path is empty, the Plex server will search for the file.
+    # We also pass show_name/season/episode_number as fallback identifiers.
     job = await _plex_request("POST", "/jobs", json={
         "episode_id": episode.id,
         "show_id": show.id,
-        "video_path": "",  # Let Plex server resolve from filesystem
+        "video_path": episode.file_path or "",
         "api_url": "http://100.71.72.6:8005",  # Hetzner's Tailscale IP
         "show_name": show.name,
         "season": episode.season,
@@ -169,7 +163,7 @@ async def start_season_processing(
             job = await _plex_request("POST", "/jobs", json={
                 "episode_id": episode.id,
                 "show_id": show.id,
-                "video_path": "",
+                "video_path": episode.file_path or "",
                 "api_url": "http://100.71.72.6:8005",
                 "show_name": show.name,
                 "season": episode.season,
