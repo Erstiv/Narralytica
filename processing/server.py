@@ -167,6 +167,18 @@ PIPELINE_STEPS = [
     ("push", "Pushing to Hetzner", 5),
 ]
 
+# Per-step subprocess timeouts (seconds)
+STEP_TIMEOUTS = {
+    "compress": 900,    # 15 min — FFmpeg can be slow on large files
+    "detect": 300,      # 5 min
+    "whisper": 1800,    # 30 min — Whisper can be slow on CPU
+    "gemini": 600,      # 10 min — API calls
+    "merge": 120,       # 2 min
+    "embed": 600,       # 10 min — embedding generation
+    "media": 600,       # 10 min — thumbnail/clip extraction
+    "push": 120,        # 2 min — HTTP push
+}
+
 
 def run_pipeline(job_id: str, request: JobRequest):
     """Run the full processing pipeline in a background thread."""
@@ -195,11 +207,15 @@ def run_pipeline(job_id: str, request: JobRequest):
         # Step 1: Compress (positional args: input output)
         job["current_step"] = "compress"
         job["progress_pct"] = 0
-        result = subprocess.run(
-            [python, str(scripts_dir / "compress.py"),
-             request.video_path, str(compressed)],
-            capture_output=True, text=True, env=env
-        )
+        try:
+            result = subprocess.run(
+                [python, str(scripts_dir / "compress.py"),
+                 request.video_path, str(compressed)],
+                capture_output=True, text=True, env=env,
+                timeout=STEP_TIMEOUTS["compress"],
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"Compress timed out after {STEP_TIMEOUTS['compress']}s")
         if result.returncode != 0:
             raise RuntimeError(f"Compress failed: {result.stderr[:500]}")
 
@@ -225,7 +241,11 @@ def run_pipeline(job_id: str, request: JobRequest):
             except Exception as e:
                 job["cutprint"] = f"fetch_error: {e}"
 
-        result = subprocess.run(detect_cmd, capture_output=True, text=True, env=env)
+        try:
+            result = subprocess.run(detect_cmd, capture_output=True, text=True, env=env,
+                                    timeout=STEP_TIMEOUTS["detect"])
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"Scene detection timed out after {STEP_TIMEOUTS['detect']}s")
         if result.returncode != 0:
             raise RuntimeError(f"Scene detection failed: {result.stderr[:500]}")
 
@@ -240,7 +260,8 @@ def run_pipeline(job_id: str, request: JobRequest):
                 [python, str(scripts_dir / "whisper_transcribe.py"),
                  request.video_path,
                  "--output", str(whisper_json)],
-                capture_output=True, text=True, env=env
+                capture_output=True, text=True, env=env,
+                timeout=STEP_TIMEOUTS["whisper"],
             )
 
         def run_gemini():
@@ -248,7 +269,8 @@ def run_pipeline(job_id: str, request: JobRequest):
                 [python, str(scripts_dir / "gemini_index.py"),
                  str(compressed), str(scenes_json),
                  "--output", str(gemini_json)],
-                capture_output=True, text=True, env=env
+                capture_output=True, text=True, env=env,
+                timeout=STEP_TIMEOUTS["gemini"],
             )
 
         with ThreadPoolExecutor(max_workers=2) as pool:
@@ -256,7 +278,11 @@ def run_pipeline(job_id: str, request: JobRequest):
             gemini_future = pool.submit(run_gemini)
 
             for future in as_completed([whisper_future, gemini_future]):
-                r = future.result()
+                try:
+                    r = future.result()
+                except subprocess.TimeoutExpired as e:
+                    name = "Whisper" if future == whisper_future else "Gemini"
+                    raise RuntimeError(f"{name} timed out: {e}")
                 if r.returncode != 0:
                     name = "Whisper" if future == whisper_future else "Gemini"
                     raise RuntimeError(f"{name} failed: {r.stderr[:500]}")
@@ -264,48 +290,64 @@ def run_pipeline(job_id: str, request: JobRequest):
         # Step 5: Merge
         job["current_step"] = "merge"
         job["progress_pct"] = 70
-        result = subprocess.run(
-            [python, str(scripts_dir / "merge_transcript.py"),
-             str(whisper_json), str(gemini_json),
-             "--output", str(merged_json)],
-            capture_output=True, text=True, env=env
-        )
+        try:
+            result = subprocess.run(
+                [python, str(scripts_dir / "merge_transcript.py"),
+                 str(whisper_json), str(gemini_json),
+                 "--output", str(merged_json)],
+                capture_output=True, text=True, env=env,
+                timeout=STEP_TIMEOUTS["merge"],
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"Merge timed out after {STEP_TIMEOUTS['merge']}s")
         if result.returncode != 0:
             raise RuntimeError(f"Merge failed: {result.stderr[:500]}")
 
         # Step 6: Embeddings
         job["current_step"] = "embed"
         job["progress_pct"] = 75
-        result = subprocess.run(
-            [python, str(scripts_dir / "generate_embeddings.py"),
-             str(merged_json), "--output", str(final_json)],
-            capture_output=True, text=True, env=env
-        )
+        try:
+            result = subprocess.run(
+                [python, str(scripts_dir / "generate_embeddings.py"),
+                 str(merged_json), "--output", str(final_json)],
+                capture_output=True, text=True, env=env,
+                timeout=STEP_TIMEOUTS["embed"],
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"Embeddings timed out after {STEP_TIMEOUTS['embed']}s")
         if result.returncode != 0:
             raise RuntimeError(f"Embeddings failed: {result.stderr[:500]}")
 
         # Step 7: Extract media (thumbnails + clips)
         job["current_step"] = "media"
         job["progress_pct"] = 85
-        result = subprocess.run(
-            [python, str(scripts_dir / "extract_media.py"),
-             request.video_path, str(scenes_json),
-             "--output-dir", str(media_dir)],
-            capture_output=True, text=True, env=env
-        )
+        try:
+            result = subprocess.run(
+                [python, str(scripts_dir / "extract_media.py"),
+                 request.video_path, str(scenes_json),
+                 "--output-dir", str(media_dir)],
+                capture_output=True, text=True, env=env,
+                timeout=STEP_TIMEOUTS["media"],
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"Media extraction timed out after {STEP_TIMEOUTS['media']}s")
         if result.returncode != 0:
             raise RuntimeError(f"Media extraction failed: {result.stderr[:500]}")
 
         # Step 8: Push to Hetzner
         job["current_step"] = "push"
         job["progress_pct"] = 95
-        result = subprocess.run(
-            [python, str(scripts_dir / "push_scenes.py"),
-             str(final_json),
-             "--episode-id", str(request.episode_id),
-             "--api-url", request.api_url],
-            capture_output=True, text=True, env=env
-        )
+        try:
+            result = subprocess.run(
+                [python, str(scripts_dir / "push_scenes.py"),
+                 str(final_json),
+                 "--episode-id", str(request.episode_id),
+                 "--api-url", request.api_url],
+                capture_output=True, text=True, env=env,
+                timeout=STEP_TIMEOUTS["push"],
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"Push timed out after {STEP_TIMEOUTS['push']}s")
         if result.returncode != 0:
             raise RuntimeError(f"Push failed: {result.stderr[:500]}")
 
@@ -418,6 +460,29 @@ async def list_jobs():
         "total": len(jobs),
         "active": sum(1 for j in jobs.values() if j["status"] == "running"),
     }
+
+
+@app.delete("/jobs/{job_id}")
+async def cancel_job(job_id: str):
+    """Mark a job as cancelled (won't stop a running subprocess, but prevents retries)."""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job = jobs[job_id]
+    if job["status"] in ("completed", "failed"):
+        return {"message": f"Job {job_id} already {job['status']}"}
+    job["status"] = "failed"
+    job["error"] = "Cancelled by user"
+    job["completed_at"] = datetime.now().isoformat()
+    return {"message": f"Job {job_id} cancelled"}
+
+
+@app.post("/jobs/clear")
+async def clear_finished_jobs():
+    """Remove all completed/failed jobs from the tracker."""
+    to_remove = [jid for jid, j in jobs.items() if j["status"] in ("completed", "failed")]
+    for jid in to_remove:
+        del jobs[jid]
+    return {"cleared": len(to_remove), "remaining": len(jobs)}
 
 
 if __name__ == "__main__":

@@ -105,6 +105,18 @@ async def get_processing_job(job_id: str):
     return await _plex_request("GET", f"/jobs/{job_id}")
 
 
+@router.delete("/jobs/{job_id}")
+async def cancel_processing_job(job_id: str):
+    """Cancel a processing job on the Plex server."""
+    return await _plex_request("DELETE", f"/jobs/{job_id}")
+
+
+@router.post("/jobs/clear")
+async def clear_finished_jobs():
+    """Clear completed/failed jobs from the Plex server."""
+    return await _plex_request("POST", "/jobs/clear")
+
+
 # --- Batch Processing ---
 
 class BatchRequest(BaseModel):
