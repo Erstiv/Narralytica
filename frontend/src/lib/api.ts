@@ -323,3 +323,58 @@ export async function uploadVideo(
   }
   return res.json();
 }
+
+// --- Tweak Studio ---
+export interface TweakOut {
+  id: number;
+  mode: "bridge" | "restyle" | "redub";
+  scene_a_id: number;
+  scene_b_id: number | null;
+  transition_prompt: string | null;
+  restyle_prompt: string | null;
+  restyle_strength: number | null;
+  redub_config: { character: string; text: string; voice_preset: string }[] | null;
+  status: "pending" | "generating" | "completed" | "failed";
+  error: string | null;
+  cost_usd: number;
+  output_url: string | null;
+  generation_seconds: number | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface VoicePreset {
+  id: string;
+  name: string;
+  gender: string;
+  accent: string;
+}
+
+export const createBridgeTweak = (sceneAId: number, sceneBId: number, prompt: string) =>
+  fetchAPI<TweakOut>("/tweaks/bridge", {
+    method: "POST",
+    body: JSON.stringify({ scene_a_id: sceneAId, scene_b_id: sceneBId, transition_prompt: prompt }),
+  });
+
+export const createRestyleTweak = (sceneAId: number, prompt: string, strength = 0.7) =>
+  fetchAPI<TweakOut>("/tweaks/restyle", {
+    method: "POST",
+    body: JSON.stringify({ scene_a_id: sceneAId, restyle_prompt: prompt, strength }),
+  });
+
+export const createRedubTweak = (sceneAId: number, lines: { character: string; text: string; voice_preset: string }[]) =>
+  fetchAPI<TweakOut>("/tweaks/redub", {
+    method: "POST",
+    body: JSON.stringify({ scene_a_id: sceneAId, lines }),
+  });
+
+export const getTweaks = (mode?: string) =>
+  fetchAPI<TweakOut[]>(`/tweaks/${mode ? `?mode=${mode}` : ""}`);
+
+export const getTweak = (id: number) => fetchAPI<TweakOut>(`/tweaks/${id}`);
+
+export const deleteTweak = (id: number) =>
+  fetchAPI<{ message: string }>(`/tweaks/${id}`, { method: "DELETE" });
+
+export const getVoicePresets = () =>
+  fetchAPI<{ voices: VoicePreset[] }>("/tweaks/voices/presets");

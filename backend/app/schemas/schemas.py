@@ -167,18 +167,41 @@ class SearchResult(BaseModel):
 
 
 # --- Tweaks ---
-class TweakCreate(BaseModel):
+class TweakBridgeCreate(BaseModel):
+    """Bridge mode: generate a transition clip between two scenes."""
     scene_a_id: int
     scene_b_id: int
     transition_prompt: str
+
+
+class TweakRestyleCreate(BaseModel):
+    """Restyle mode: apply a visual style to a scene frame."""
+    scene_a_id: int
+    restyle_prompt: str
+    strength: float = 0.7   # 0.0 = subtle, 1.0 = dramatic
+
+
+class TweakRedubCreate(BaseModel):
+    """Redub mode: replace dialog audio with TTS voices."""
+    scene_a_id: int
+    lines: list[dict]       # [{character, text, voice_preset}]
 
 
 class TweakOut(BaseModel):
     id: int
+    mode: str
     scene_a_id: int
-    scene_b_id: int
-    transition_prompt: str
+    scene_b_id: int | None = None
+    transition_prompt: str | None = None
+    restyle_prompt: str | None = None
+    restyle_strength: float | None = None
+    redub_config: list | None = None
     status: str
+    error: str | None = None
+    cost_usd: float = 0
+    output_url: str | None = None
+    generation_seconds: float | None = None
     created_at: datetime
+    completed_at: datetime | None = None
 
     model_config = {"from_attributes": True}

@@ -165,14 +165,38 @@ class Tweak(Base):
     __tablename__ = "tweaks"
 
     id = Column(Integer, primary_key=True)
+    mode = Column(String(20), nullable=False, default="bridge")  # bridge, restyle, redub
+
+    # Scene references (scene_b only used for bridge mode)
     scene_a_id = Column(Integer, ForeignKey("scenes.id"))
     scene_b_id = Column(Integer, ForeignKey("scenes.id"))
-    transition_prompt = Column(Text, nullable=False)
+
+    # Bridge mode
+    transition_prompt = Column(Text)
     bridge_video_path = Column(Text)
+
+    # Restyle mode
+    restyle_prompt = Column(Text)          # "oil painting style", "noir", etc.
+    restyle_strength = Column(Float)       # 0.0–1.0
+    restyle_image_path = Column(Text)      # Generated image output
+
+    # Redub mode
+    redub_config = Column(JSON)            # [{character, voice_id, lines}]
+    redub_audio_path = Column(Text)        # Generated audio output
+
+    # Common
     final_clip_path = Column(Text)
-    status = Column(String(50), default="pending")
-    veo_cost_usd = Column(Float, default=0)
+    output_url = Column(Text)              # Public-accessible URL for result
+    status = Column(String(50), default="pending")  # pending, generating, completed, failed
+    error = Column(Text)
+    cost_usd = Column(Float, default=0)
+    veo_cost_usd = Column(Float, default=0)         # Legacy alias
+    generation_seconds = Column(Float)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True))
+
+    scene_a = relationship("Scene", foreign_keys=[scene_a_id])
+    scene_b = relationship("Scene", foreign_keys=[scene_b_id])
 
 
 class SearchHistory(Base):
