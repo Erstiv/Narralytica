@@ -156,8 +156,25 @@ export interface SearchRequest {
   query: string;
   min_confidence?: number;
   characters?: string[];
+  tone?: string;
+  plot_significance?: string;
+  setting_type?: string;
+  max_explicitness_violence?: number;
+  max_explicitness_language?: number;
+  show_id?: number;
+  episode_id?: number;
   limit?: number;
 }
+
+export interface SearchFacets {
+  characters: string[];
+  tones: string[];
+  pacings: string[];
+  plot_significance: string[];
+  setting_types: string[];
+}
+
+export const getSearchFacets = () => fetchAPI<SearchFacets>("/search/facets");
 
 // Shows
 export interface ShowSummary {

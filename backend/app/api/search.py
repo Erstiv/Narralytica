@@ -2,17 +2,54 @@ import time
 import logging
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, text
+from sqlalchemy import select, text, func as sqlfunc, distinct
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.embeddings import embed_query
-from app.models.models import Scene, SearchHistory
+from app.models.models import Scene, Episode, SearchHistory
 from app.schemas.schemas import SearchRequest, SearchResult, SceneOut
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/search", tags=["search"])
+
+
+def _apply_filters(query, body: SearchRequest):
+    """Apply all SQL filters from the search request to a query."""
+    if body.min_confidence:
+        query = query.where(Scene.overall_confidence >= body.min_confidence)
+
+    if body.characters:
+        for char in body.characters:
+            query = query.where(
+                Scene.characters_present.cast(text("text")).ilike(f"%{char}%")
+            )
+
+    if body.tone:
+        query = query.where(Scene.tone == body.tone)
+
+    if body.plot_significance:
+        query = query.where(Scene.plot_significance == body.plot_significance)
+
+    if body.setting_type:
+        query = query.where(Scene.setting_type == body.setting_type)
+
+    if body.max_explicitness_violence is not None:
+        query = query.where(Scene.explicitness_violence <= body.max_explicitness_violence)
+
+    if body.max_explicitness_language is not None:
+        query = query.where(Scene.explicitness_language <= body.max_explicitness_language)
+
+    if body.show_id:
+        query = query.join(Episode, Scene.episode_id == Episode.id).where(
+            Episode.show_id == body.show_id
+        )
+
+    if body.episode_id:
+        query = query.where(Scene.episode_id == body.episode_id)
+
+    return query
 
 
 @router.post("/", response_model=list[SearchResult])
@@ -22,7 +59,7 @@ async def search_scenes(body: SearchRequest, db: AsyncSession = Depends(get_db))
     Strategy:
     1. Embed the query text via Gemini text-embedding-004
     2. Find scenes by cosine similarity (pgvector)
-    3. Apply SQL filters (characters, min_confidence) on top
+    3. Apply SQL filters (characters, tone, explicitness, etc.)
     4. Return ranked results with similarity scores
     """
     start = time.time()
@@ -34,8 +71,6 @@ async def search_scenes(body: SearchRequest, db: AsyncSession = Depends(get_db))
         query_embedding = None
 
     if query_embedding is not None:
-        # Vector similarity search using pgvector cosine distance
-        # 1 - cosine_distance = cosine_similarity (0 to 1)
         similarity_expr = (
             1 - Scene.description_embedding.cosine_distance(query_embedding)
         )
@@ -43,17 +78,10 @@ async def search_scenes(body: SearchRequest, db: AsyncSession = Depends(get_db))
         query = (
             select(Scene, similarity_expr.label("similarity"))
             .where(Scene.description_embedding.isnot(None))
-            .where(Scene.overall_confidence >= body.min_confidence)
         )
-
-        # Character filter
-        if body.characters:
-            for char in body.characters:
-                query = query.where(
-                    Scene.characters_present.cast(text("text")).ilike(f"%{char}%")
-                )
-
+        query = _apply_filters(query, body)
         query = query.order_by(similarity_expr.desc()).limit(body.limit)
+
         result = await db.execute(query)
         rows = result.all()
 
@@ -65,14 +93,9 @@ async def search_scenes(body: SearchRequest, db: AsyncSession = Depends(get_db))
             for row in rows
         ]
     else:
-        # Fallback: text-based search (no embeddings available)
-        query = select(Scene).where(Scene.overall_confidence >= body.min_confidence)
-
-        if body.characters:
-            for char in body.characters:
-                query = query.where(
-                    Scene.characters_present.cast(text("text")).ilike(f"%{char}%")
-                )
+        # Fallback: text-based search
+        query = select(Scene)
+        query = _apply_filters(query, body)
 
         if body.query:
             like_pattern = f"%{body.query}%"
@@ -96,7 +119,6 @@ async def search_scenes(body: SearchRequest, db: AsyncSession = Depends(get_db))
 
     latency = (time.time() - start) * 1000
 
-    # Log search analytics
     db.add(SearchHistory(
         query=body.query,
         result_count=len(results),
@@ -106,3 +128,49 @@ async def search_scenes(body: SearchRequest, db: AsyncSession = Depends(get_db))
 
     logger.info(f"Search '{body.query}': {len(results)} results in {latency:.0f}ms")
     return results
+
+
+@router.get("/facets")
+async def get_search_facets(db: AsyncSession = Depends(get_db)):
+    """Return available filter values for the search sidebar.
+
+    Queries the indexed scenes to find all distinct values for
+    filterable fields. Used by the frontend to populate dropdowns.
+    """
+    # Characters: extract distinct names from JSON arrays
+    char_result = await db.execute(text("""
+        SELECT DISTINCT jsonb_array_elements(characters_present::jsonb)->>'name' AS name
+        FROM scenes
+        WHERE characters_present IS NOT NULL
+        ORDER BY name
+    """))
+    characters = [row[0] for row in char_result.all() if row[0]]
+
+    # Simple distinct values for categorical fields
+    tone_result = await db.execute(
+        select(distinct(Scene.tone)).where(Scene.tone.isnot(None)).order_by(Scene.tone)
+    )
+    tones = [row[0] for row in tone_result.all()]
+
+    pacing_result = await db.execute(
+        select(distinct(Scene.scene_pacing)).where(Scene.scene_pacing.isnot(None)).order_by(Scene.scene_pacing)
+    )
+    pacings = [row[0] for row in pacing_result.all()]
+
+    plot_result = await db.execute(
+        select(distinct(Scene.plot_significance)).where(Scene.plot_significance.isnot(None)).order_by(Scene.plot_significance)
+    )
+    plot_levels = [row[0] for row in plot_result.all()]
+
+    setting_result = await db.execute(
+        select(distinct(Scene.setting_type)).where(Scene.setting_type.isnot(None)).order_by(Scene.setting_type)
+    )
+    settings = [row[0] for row in setting_result.all()]
+
+    return {
+        "characters": characters,
+        "tones": tones,
+        "pacings": pacings,
+        "plot_significance": plot_levels,
+        "setting_types": settings,
+    }

@@ -151,6 +151,13 @@ class SearchRequest(BaseModel):
     query: str
     min_confidence: float = 0.0
     characters: list[str] | None = None
+    tone: str | None = None
+    plot_significance: str | None = None
+    setting_type: str | None = None
+    max_explicitness_violence: float | None = None
+    max_explicitness_language: float | None = None
+    show_id: int | None = None
+    episode_id: int | None = None
     limit: int = 20
 
 
