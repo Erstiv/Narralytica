@@ -1,146 +1,214 @@
-# Narralytica Handoff — Phases 1–3 Complete
+# Narralytica v2 — Handoff (Updated 2026-03-28)
 
-## What's Done
-
-Narralytica is live at **https://captainofindustries.com** with all 4 Docker containers running on Hetzner (178.156.251.26, SSH alias: `filou`). The POC episode (Simpsons S04E17 "Last Exit to Springfield") is fully indexed, searchable, and exportable.
-
-### Architecture on Hetzner (`/var/www/narralytica/`)
-- **narralytica-frontend**: Next.js 15 + React 19, port 3020 → proxied through nginx
-- **narralytica-backend**: FastAPI, port 8005 → proxied at `/api/`
-- **narralytica-db**: PostgreSQL 16 + pgvector, port 5433
-- **narralytica-worker**: Celery (stub, ready for background tasks)
-- **Nginx**: SSL via Let's Encrypt, auto-renewing
-- **Media**: Thumbnails + clips served from `/api/media/` via Docker volume
-
-### GitHub
-Repo: https://github.com/Erstiv/Narralytica
-
-### M5 Mac (`~/narralytica/`)
-Processing machine for heavy work (FFmpeg, Whisper, Gemini uploads). Contains:
-- `input/simpsons_s04e17.ogm` — original episode (175.5 MB)
-- `processing/output/compressed.mp4` — 720p 1fps version (80.9 MB)
-- `processing/output/scenes.json` — 9 scene boundaries
-- `processing/output/scenes_gemini.json` — Gemini analysis with objects
-- `processing/output/whisper_transcript.json` — word-level transcript (1,997 words)
-- `processing/output/scenes_merged.json` — merged transcript with named speakers
-- `processing/output/scenes_final.json` — final with 768-dim embeddings
-- `processing/output/media/thumbs/` — 9 JPG thumbnails
-- `processing/output/media/clips/` — 9 MP4 clips (204 MB total)
+## Quick Start
+```bash
+# Read this file first, then check the Master Brief and Errata in ~/Downloads/
+# The project is live at https://captainofindustries.com
+# GitHub: https://github.com/Erstiv/Narralytica
+```
 
 ---
 
-## What's Working
+## What's Done (Phases 1–3 + Session 3)
 
-### Frontend Pages
-- `/` — Dashboard (episode pipeline status, quick stats)
-- `/search` — Semantic search with real thumbnails, video preview overlay, clip downloads
-- `/tweak` — Tweak Studio placeholder (Phase 4)
-- `/admin` — Admin panel (re-index, export, usage stats)
+### Session 3 Accomplishments (2026-03-28)
+1. **DB renamed**: `narrowlitics` → `narralytica` (user, database, .env all updated)
+2. **35+ field metadata schema**: Migration 005 added 29 columns. Gemini prompt rewritten for full extraction. Scene data now includes cinematography, audio, humor classification, cultural references, 5-dimensional explicitness, location details, emotional arc, and more.
+3. **CutPrint™ scene detection**: Two-pass algorithm — ContentDetector finds raw camera cuts, then merge algorithm groups them into story-level scenes. Results went from 9 garbage scenes (one was 15 minutes) to **25 proper scenes** (median 52s).
+4. **CutPrint calibration script**: `cutprint_calibrate.py` auto-picks 3 episodes, sweeps thresholds + min_scene_durations, scores distributions, outputs optimal profile. 6 genre presets.
+5. **Plex Mac setup**: Homebrew, Python 3.12, FFmpeg 8.1, venv with scenedetect+opencv. Passwordless sudo for `jers`.
+6. **Tailscale confirmed**: Hetzner ↔ Plex Mac tunnel working.
+7. **Semantic search verified**: "dental plan" → correct union scene (0.762 similarity).
 
-### API Endpoints
+### What Was Already Working
+- Frontend: Dashboard, Search, Admin pages at captainofindustries.com
+- Backend: FastAPI + Celery + Postgres/pgvector
+- Full processing pipeline: compress → detect → transcribe → analyze → embed → ingest
+- Export: SRT, script JSON, metadata CSV/JSON, DOCX
+- Library management: Sonarr/Radarr integration for show import
+
+---
+
+## Architecture
+
+### Servers
+| Machine | Role | IP | Access |
+|---------|------|----|--------|
+| **Hetzner (Filou)** | Backend, DB, Sonarr/Radarr, Nginx | 178.156.251.26 / Tailscale: 100.71.72.6 | `ssh filou` (root) |
+| **Plex Mac** | Media storage, processing | LAN: 192.168.0.147 / Tailscale: 100.108.190.10 | `ssh filou` then `ssh jers@100.108.190.10` |
+| **M5 Mac** | Development | local | Elliot's work machine |
+
+### Services on Hetzner (`/var/www/narralytica/`)
+| Service | Port | Container |
+|---------|------|-----------|
+| Narralytica Backend (FastAPI) | 8005 | `narralytica-backend` |
+| Narralytica Frontend (React) | 3020 | `narralytica-frontend` |
+| Narralytica Worker (Celery) | — | `narralytica-worker` |
+| Narralytica DB (Postgres+pgvector) | 5433 | `narralytica-db` |
+| Sonarr | 8989 | standalone |
+| Radarr | 7878 | standalone |
+| Thea Panel | 3005 | PM2: `thea-panel` |
+| Nginx | 80/443 | system |
+
+**DO NOT TOUCH:** Sonarr, Radarr, Thea, Nginx, or any non-Narralytica service.
+
+### Coexisting Services (ports to avoid)
+Cassian (8003), Googloid (3000), lucidnidra (3001), marilynstivers (3002), the-sighs (3003), plinkatron (3005), snap-and-grab (3010), SONIX (Docker internal), full *arr stack.
+
+### Credentials
 ```
-GET  /api/health                         — health check
-GET  /api/episodes/                      — list episodes
-GET  /api/episodes/{id}                  — get episode
-PATCH /api/episodes/{id}/status          — update episode status
-GET  /api/scenes/episode/{id}            — list scenes for episode
-GET  /api/scenes/{id}                    — get scene
-POST /api/scenes/episode/{id}/bulk       — bulk ingest (scenes + objects + embeddings + transcript)
-POST /api/search/                        — hybrid vector + SQL search (returns {scene, similarity})
-GET  /api/export/{id}/srt                — diarized SRT subtitles
-GET  /api/export/{id}/script-json        — rich transcript JSON
-GET  /api/export/{id}/metadata-json      — full scene metadata JSON
-GET  /api/export/{id}/metadata-csv       — Excel-friendly CSV
-GET  /api/export/{id}/script-docx        — formatted Word script
-GET  /api/media/thumbs/scene_XX.jpg      — scene thumbnails
-GET  /api/media/clips/scene_XX.mp4       — scene video clips
+# Narralytica DB (UPDATED - was narrowlitics)
+POSTGRES_USER=narralytica
+POSTGRES_PASSWORD=017c23c0ab7c64f144057c85d09a2efe
+POSTGRES_DB=narralytica
+
+# APIs
+GEMINI_API_KEY=AIzaSyDqUVSt2T9yEla1tniElj2UY-JsGINUNXU
+SONARR_API_KEY=e068e976a5704fd0a74a4abc7bbb393c
+RADARR_API_KEY=9008a9c7473d47d3a43e026731568f06
+PLEX_TOKEN=PQAmJ4YXSKexz1ubB-Cb
 ```
 
-### Database Tables
-- `shows` — show metadata
+### Media Paths
+| Location | Path | Contents |
+|----------|------|----------|
+| Hetzner (downloads) | `/data/media/tv/`, `/data/media/movies/` | Sonarr/Radarr download staging |
+| Plex Mac - Chaos | `/Volumes/Chaos/TV Shows/`, `/Volumes/Chaos/Movies/` | 20TB, ~6000 movies |
+| Plex Mac - Luchagaido | `/Volumes/Luchagaido/TV Shows/`, `/Volumes/Luchagaido/Movies/` | 12TB, newer content |
+
+---
+
+## API Endpoints (port 8005)
+```
+GET  /api/health
+GET  /api/episodes/
+GET  /api/episodes/{id}
+PATCH /api/episodes/{id}/status
+POST /api/scenes/episode/{id}/bulk          — Ingest scenes (with embeddings)
+GET  /api/scenes/episode/{id}               — List scenes for episode
+GET  /api/scenes/{id}                       — Single scene
+POST /api/search/                           — Semantic search {query, limit}
+GET  /api/export/{id}/srt                   — SRT subtitles
+GET  /api/export/{id}/script-json           — Transcript JSON
+GET  /api/export/{id}/metadata-json         — Full metadata JSON
+GET  /api/export/{id}/metadata-csv          — CSV export
+GET  /api/export/{id}/script-docx           — Word document
+GET  /api/library/sonarr/shows              — Browse Sonarr
+GET  /api/library/sonarr/shows/{id}/episodes
+POST /api/library/import/{sonarr_id}        — Import show from Sonarr
+GET  /api/library/shows                     — List imported shows
+GET  /api/library/shows/{id}                — Show detail + cutprint
+POST /api/library/shows/{id}/cutprint       — Save CutPrint profile
+GET  /api/library/shows/{id}/cutprint       — Get CutPrint profile
+GET  /api/media/thumbs/scene_XX.jpg         — Thumbnails
+GET  /api/media/clips/scene_XX.mp4          — Video clips
+```
+
+---
+
+## Processing Scripts
+
+### On Plex Mac (`/Users/jers/narralytica/processing/scripts/`)
+Run with `/Users/jers/narralytica-venv/bin/python3.12`
+
+| Script | Purpose | Status |
+|--------|---------|--------|
+| `cutprint_calibrate.py` | CutPrint™ auto-calibration (3 episodes, threshold + min_scene sweep) | ✅ NEW |
+| `detect_scenes.py` | Scene detection with CutPrint merge (`--threshold`, `--min-scene`, `--profile`) | ✅ UPDATED |
+| `gemini_index.py` | Gemini 2.5 Flash analysis (35+ field prompt, show-agnostic) | ✅ UPDATED |
+| `generate_embeddings.py` | text-embedding-004, 1536-dim embeddings with enriched text | ✅ UPDATED |
+| `compress.py` | FFmpeg 720p 1fps compression | ✅ |
+| `transcribe_whisper.py` | faster-whisper large-v3 word-level | ✅ |
+| `merge_transcript.py` | Merge Whisper + Gemini speaker names | ✅ |
+| `push_scenes.py` | POST to bulk ingest API | ✅ |
+| `extract_media.py` | Thumbnails + clips per scene | ✅ |
+| `run_pipeline.py` | Full orchestrator | ✅ |
+
+### Plex Mac Venv Status
+Installed: scenedetect, opencv-python
+**Still needs:** faster-whisper, google-genai, rapidfuzz, fastapi, uvicorn, httpx
+
+```bash
+/Users/jers/narralytica-venv/bin/pip install faster-whisper google-genai rapidfuzz fastapi uvicorn httpx
+```
+
+---
+
+## CutPrint™ System
+
+### How It Works
+1. **Raw detection**: `ContentDetector(threshold=T)` finds every camera cut (~17/min for animation)
+2. **Merge**: Groups consecutive cuts into story-level scenes by enforcing `min_scene_duration`
+3. **Two-pass merge**: Forward accumulation pass + cleanup pass for tail scenes
+
+### Genre Presets
+| Genre | Threshold Range | Min Scene Range | Target Median |
+|-------|----------------|-----------------|---------------|
+| classic_animation | 18-30 | 40-70s | 50s |
+| modern_animation | 22-35 | 35-60s | 45s |
+| anime | 20-32 | 50-90s | 65s |
+| live_action_comedy | 28-42 | 35-60s | 50s |
+| live_action_drama | 28-42 | 50-90s | 65s |
+| reality | 30-45 | 30-60s | 45s |
+
+### Calibration Status
+- **The Simpsons**: Manual calibration validated (threshold=22, min_scene=50 → 25 scenes). Formal auto-calibration was IN PROGRESS when session ended. Check `/tmp/cutprint_simpsons.json` on Plex Mac.
+- **Danger 5**: Not yet calibrated. Available at `/Volumes/Chaos/TV Shows/Danger 5/Season 1`. Use `--genre live_action_comedy`.
+
+### DB Storage
+Shows table has: `cutprint_threshold`, `cutprint_min_scene`, `cutprint_genre`, `cutprint_calibrated_at`, `cutprint_profile` (JSONB).
+
+---
+
+## Database Tables
+- `shows` — show metadata + CutPrint profile (migration 006)
 - `episodes` — episode tracking with status
-- `scenes` — 9 indexed scenes with characters, dialog, actions, mood, objects, embeddings, merged transcript
-- `scene_objects` — normalized object tags (food, vehicle, prop, etc.)
+- `scenes` — **25 indexed scenes** with 42+ fields each, 1536-dim embeddings (migrations 005, 006)
+- `scene_objects` — normalized object tags
 - `search_history` — search analytics
 - `tweaks` — Phase 4 stub
 
-### Processing Scripts (M5 Mac)
-```
-processing/scripts/
-├── compress.py              — FFmpeg 720p/1fps compression
-├── detect_scenes.py         — PySceneDetect content-aware boundaries
-├── whisper_transcribe.py    — faster-whisper large-v3 word-level transcription
-├── gemini_index.py          — Gemini 2.5 Flash scene analysis + object tagging
-├── merge_transcript.py      — reconcile Whisper verbatim + Gemini speaker names
-├── generate_embeddings.py   — gemini-embedding-001, 768-dim, truncated
-├── push_scenes.py           — POST to /api/scenes/episode/{id}/bulk
-├── extract_media.py         — FFmpeg thumbnails + clips per scene
-└── run_pipeline.py          — orchestrator (Whisper+Gemini parallel → merge → embed → push)
-```
+---
 
-### Full Pipeline Command (M5 Mac)
+## Deploy Pattern
 ```bash
-export GEMINI_API_KEY=your_key
-cd ~/narralytica
-python3 processing/scripts/run_pipeline.py input/simpsons_s04e17.ogm processing/output/scenes.json
+# From M5 Mac:
+cd ~/narralytica && git add -A && git commit -m "message" && git push origin main
+
+# Hetzner:
+ssh filou 'cd /var/www/narralytica && git pull && docker compose up -d --force-recreate narralytica-backend'
+
+# Plex Mac:
+ssh filou "ssh jers@100.108.190.10 'cd /Users/jers/narralytica && git pull'"
 ```
-Takes ~24 minutes. Steps 4 (Whisper) and 5 (Gemini) run in parallel.
 
 ---
 
-## Key Technical Details
+## What's Next
 
-### Search Architecture
-- Query text → embedded via `gemini-embedding-001` (768-dim, RETRIEVAL_QUERY task type)
-- pgvector cosine similarity against stored scene embeddings (RETRIEVAL_DOCUMENT at index time)
-- SQL filters (characters, min_confidence) applied on top
-- Falls back to text ILIKE search if embedding fails
-- Returns `SearchResult` = `{scene: SceneOut, similarity: float}`
+### Immediate (finish Session 3 work)
+1. Check CutPrint calibration result on Plex Mac (`/tmp/cutprint_simpsons.json`), save to DB
+2. Calibrate Danger 5 (proves cross-genre CutPrint)
+3. Install remaining pip packages on Plex Mac venv
+4. Wire CutPrint into automated pipeline (look up show profile, pass to detect_scenes)
 
-### Database Credentials (Server .env)
-The PostgreSQL data directory was initialized with user/db `narrowlitics` (pre-rename). The `.env` on Hetzner keeps `POSTGRES_USER=narrowlitics` and `POSTGRES_DB=narrowlitics` to match the existing data. Don't change these — Docker Compose templates reference them via `${POSTGRES_USER:-narralytica}` defaults that get overridden.
+### Stage C (from Master Brief)
+- Build Plex-side FastAPI processing server (receives jobs from Hetzner via Tailscale)
+- Whisper transcript merge into expanded scene data
+- Frontend updates for 35+ field display
+- Batch processing (queue full seasons)
 
-### Python Architecture Issues (M5 Mac)
-The system Python 3.14 has x86_64/arm64 architecture conflicts. Key fixes applied:
-- `pydantic-core` arm64 .so manually copied from `--platform macosx_11_0_arm64` download
-- FFmpeg is at `/opt/homebrew/bin/ffmpeg` — needs `PATH="/opt/homebrew/bin:$PATH"`
-- faster-whisper, rapidfuzz, google-genai all installed and working
-
-### Transcript Merge Quality
-The merge uses timestamp alignment + fuzzy string matching (rapidfuzz). Current results:
-- 346 total transcript segments across 9 scenes
-- 147 speakers auto-identified, 199 flagged for manual review
-- This is expected with Option B (simple alignment). Option A (pyannote-audio) would improve this.
-
-### Renamed from Narrowlitics
-The project was renamed from "Narrowlitics" to "Narralytica" on 2026-03-27. The old repo at `github.com/Erstiv/Narrowlitics` still exists but is stale. All work is in `github.com/Erstiv/Narralytica`.
+### Stage D (Tweak Studio)
+- AI-generated scene transitions via Veo 3.1
+- Client dashboard with usage analytics
 
 ---
 
-## Coexisting Services on Hetzner (DO NOT DISTURB)
-- Cassian: port 8003, planterpruner.com
-- Googloid: port 3000, googloid.com
-- SONIX: Docker (internal)
-- Plus: lucidnidra (3001), marilynstivers (3002), the-sighs (3003), plinkatron (3005), snap-and-grab (3010), and the full *arr stack
-
----
-
-## What's Next: Phase 4 (Tweak Studio)
-
-The remaining planned work:
-1. **Tweak Studio** — AI-generated scene transitions via Veo 3.1
-2. **Batch processing** — scale to full season ingestion (multi-episode)
-3. **pyannote-audio** — improved speaker diarization for transcript accuracy
-4. **Client dashboard** — usage analytics and billing
-5. **Scene detection tuning** — the 892s first scene suggests threshold needs adjustment
-
----
-
-## Important Rules for This Server
-- **NEVER kill processes** without being explicitly asked
-- Use `systemctl` for service management
-- Prefer Python file-write scripts over heredoc blocks (heredocs break with Jinja2)
-- Push to GitHub regularly: `github.com/Erstiv/Narralytica`
-- Elliot is a beginner with server management — explain commands clearly
-- Port map: backend=8005, frontend=3020, db=5433
-- Deploy pattern: `ssh filou "cd /var/www/narralytica && git pull && docker compose up --build -d"`
+## Gotchas
+- **OGM/AVI files** need FFmpeg conversion before OpenCV/PySceneDetect. `convert_if_needed()` handles this automatically.
+- **Gemini returns inconsistent types** — `_to_str()` helper in `scenes.py` coerces lists to semicolon-joined strings.
+- **Double SSH hop** to Plex Mac — output is buffered until command finishes.
+- **Another Claude instance** may be working on Thea (Project Thea, plex media center) on the Plex Mac. Different project/language/ports — no conflict.
+- **Elliot is a beginner** with server management — explain commands clearly.
+- **Prefer Python scripts** over heredocs (heredocs break with Jinja2).
+- **Never kill processes** without being asked.
