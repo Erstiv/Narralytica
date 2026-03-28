@@ -58,17 +58,16 @@ DEFAULT_GENRE = "classic_animation"
 
 
 def convert_if_needed(video_path: str) -> str:
-    """Convert non-MP4 files to MP4 for OpenCV compatibility."""
-    ext = os.path.splitext(video_path)[1].lower()
-    if ext in ('.mp4', '.mkv', '.avi'):
-        # Try opening directly first
-        try:
-            v = open_video(video_path)
-            return video_path
-        except Exception:
-            pass
+    """Convert video to MP4 if OpenCV can't read it directly."""
+    # Always try opening directly first (fastest path)
+    try:
+        v = open_video(video_path)
+        # Verify we can actually read a frame
+        return video_path
+    except Exception:
+        pass
 
-    # Convert to temp MP4
+    # OpenCV can't handle this format/codec — convert via FFmpeg
     tmp = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False, dir='/tmp')
     tmp.close()
     print(f"  Converting {os.path.basename(video_path)} to MP4...")
@@ -79,7 +78,7 @@ def convert_if_needed(video_path: str) -> str:
     )
     if result.returncode != 0:
         print(f"  FFmpeg error: {result.stderr[-200:]}")
-        sys.exit(1)
+        return None  # Skip this episode instead of crashing
     return tmp.name
 
 
@@ -272,6 +271,9 @@ def calibrate(video_paths: list, genre: str = DEFAULT_GENRE) -> dict:
     for vp in video_paths:
         print(f"\n  Episode: {os.path.basename(vp)}")
         converted = convert_if_needed(vp)
+        if converted is None:
+            print(f"  WARNING: Skipping (conversion failed)")
+            continue
         converted_paths.append(converted)
 
         for threshold in range(thresh_low, thresh_high + 1, 2):
