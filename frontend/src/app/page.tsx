@@ -1,99 +1,154 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getEpisodes, getHealth, type Episode } from "@/lib/api";
+import { getShows, getHealth, type ShowSummary } from "@/lib/api";
 
-export default function Dashboard() {
-  const [episodes, setEpisodes] = useState<Episode[]>([]);
+// --- Show Card ---
+function ShowCard({ show }: { show: ShowSummary }) {
+  return (
+    <a
+      href={`/show/${show.id}`}
+      className="flex-shrink-0 w-48 group cursor-pointer"
+    >
+      <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-gray-800 shadow-lg group-hover:ring-2 group-hover:ring-simpsons-yellow transition-all group-hover:scale-105 duration-200">
+        {show.poster_url ? (
+          <img
+            src={show.poster_url}
+            alt={show.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-600 text-sm">
+            No Poster
+          </div>
+        )}
+        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/80 to-transparent" />
+        <div className="absolute bottom-2 left-2 right-2">
+          <p className="text-sm font-semibold truncate">{show.name}</p>
+          <p className="text-xs text-gray-400">
+            {show.year} &middot; {show.episode_count} eps
+          </p>
+        </div>
+      </div>
+    </a>
+  );
+}
+
+// --- Horizontal Scroll Row ---
+function ShowRow({ title, shows }: { title: string; shows: ShowSummary[] }) {
+  if (shows.length === 0) return null;
+  return (
+    <section>
+      <h2 className="text-xl font-semibold mb-3">{title}</h2>
+      <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+        {shows.map((show) => (
+          <ShowCard key={show.id} show={show} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// --- Hero Banner ---
+function HeroBanner({ show }: { show: ShowSummary }) {
+  return (
+    <div className="relative w-full h-[400px] rounded-xl overflow-hidden mb-8">
+      {show.fanart_url ? (
+        <img
+          src={show.fanart_url}
+          alt={show.name}
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <div className="w-full h-full bg-gradient-to-r from-gray-900 to-gray-800" />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/40 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-r from-gray-950/80 to-transparent" />
+
+      <div className="absolute bottom-8 left-8 max-w-lg">
+        <h1 className="text-4xl font-bold mb-2">{show.name}</h1>
+        <div className="flex items-center gap-3 text-sm text-gray-300 mb-4">
+          {show.year && <span>{show.year}</span>}
+          {show.network && <span>{show.network}</span>}
+          <span>{show.episode_count} episodes</span>
+        </div>
+        <div className="flex gap-2 mb-3">
+          {show.genres.map((g) => (
+            <span key={g} className="bg-gray-800/80 px-2 py-1 rounded text-xs text-gray-300">
+              {g}
+            </span>
+          ))}
+        </div>
+        <div className="flex gap-3">
+          <a
+            href={`/show/${show.id}`}
+            className="bg-simpsons-yellow text-black font-semibold px-6 py-2.5 rounded-lg hover:bg-yellow-400 transition text-sm"
+          >
+            View Show
+          </a>
+          <a
+            href="/search"
+            className="bg-gray-800/80 text-white px-6 py-2.5 rounded-lg hover:bg-gray-700 transition text-sm"
+          >
+            Search Scenes
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Main Splash Page ---
+export default function SplashPage() {
+  const [shows, setShows] = useState<ShowSummary[]>([]);
   const [health, setHealth] = useState<string>("checking...");
 
   useEffect(() => {
     getHealth()
       .then(() => setHealth("connected"))
       .catch(() => setHealth("offline"));
-    getEpisodes()
-      .then(setEpisodes)
+    getShows()
+      .then(setShows)
       .catch(() => {});
   }, []);
 
-  const statusColor: Record<string, string> = {
-    pending: "bg-gray-600",
-    compressing: "bg-yellow-600",
-    detecting: "bg-blue-600",
-    indexing: "bg-purple-600",
-    ready: "bg-green-600",
-    error: "bg-red-600",
-  };
+  const animated = shows.filter((s) =>
+    s.genres.some((g) => g.toLowerCase().includes("animation"))
+  );
+  const liveAction = shows.filter(
+    (s) => !s.genres.some((g) => g.toLowerCase().includes("animation"))
+  );
+
+  const hero = shows.length > 0
+    ? shows.reduce((a, b) => (a.episode_count > b.episode_count ? a : b))
+    : null;
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-simpsons-yellow">Dashboard</h1>
-        <p className="text-gray-400 mt-1">
-          API: <span className={health === "connected" ? "text-green-400" : "text-red-400"}>{health}</span>
-        </p>
+    <div className="space-y-8 -mt-4">
+      <div className="flex justify-end">
+        <span className={`text-xs ${health === "connected" ? "text-green-500" : "text-red-500"}`}>
+          {health === "connected" ? "API Connected" : "API Offline"}
+        </span>
       </div>
 
-      {/* Episode Pipeline */}
-      <section>
-        <h2 className="text-xl font-semibold mb-4">Processing Pipeline</h2>
-        <div className="grid gap-4">
-          {episodes.length === 0 ? (
-            <div className="bg-gray-900 rounded-lg border border-gray-800 p-6 text-center text-gray-500">
-              No episodes loaded yet. Start by running the compression script on your M5 Mac.
-            </div>
-          ) : (
-            episodes.map((ep) => (
-              <div
-                key={ep.id}
-                className="bg-gray-900 rounded-lg border border-gray-800 p-4 flex items-center justify-between"
-              >
-                <div>
-                  <h3 className="font-medium">
-                    S{String(ep.season).padStart(2, "0")}E
-                    {String(ep.episode_number).padStart(2, "0")} &mdash;{" "}
-                    {ep.title}
-                  </h3>
-                  <p className="text-sm text-gray-400">
-                    {ep.duration_seconds
-                      ? `${Math.round(ep.duration_seconds / 60)} min`
-                      : "Duration unknown"}
-                    {ep.gemini_cost_usd > 0 &&
-                      ` | Cost: $${ep.gemini_cost_usd.toFixed(2)}`}
-                  </p>
-                </div>
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-medium ${statusColor[ep.status] || "bg-gray-600"}`}
-                >
-                  {ep.status}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
+      {hero && <HeroBanner show={hero} />}
 
-      {/* Quick Stats Placeholder */}
-      <section>
-        <h2 className="text-xl font-semibold mb-4">Quick Stats</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            { label: "Total Scenes", value: "--" },
-            { label: "Avg Confidence", value: "--" },
-            { label: "Searches Today", value: "--" },
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className="bg-gray-900 rounded-lg border border-gray-800 p-4 text-center"
-            >
-              <p className="text-2xl font-bold text-simpsons-yellow">
-                {stat.value}
-              </p>
-              <p className="text-sm text-gray-400">{stat.label}</p>
-            </div>
-          ))}
+      <ShowRow title="All Shows" shows={shows} />
+      <ShowRow title="Animation" shows={animated} />
+      <ShowRow title="Live Action" shows={liveAction} />
+
+      {shows.length === 0 && health === "connected" && (
+        <div className="text-center py-16">
+          <p className="text-2xl text-gray-400 mb-4">No shows yet</p>
+          <p className="text-gray-500">
+            Import a show from the{" "}
+            <a href="/admin" className="text-simpsons-yellow hover:underline">
+              Admin page
+            </a>{" "}
+            to get started.
+          </p>
         </div>
-      </section>
+      )}
     </div>
   );
 }

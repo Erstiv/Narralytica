@@ -11,6 +11,10 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+// Shows
+export const getShows = () => fetchAPI<ShowSummary[]>("/library/shows");
+export const getShowDetail = (id: number) => fetchAPI<ShowDetail>(`/library/shows/${id}`);
+
 // Episodes
 export const getEpisodes = () => fetchAPI<Episode[]>("/episodes/");
 export const getEpisode = (id: number) => fetchAPI<Episode>(`/episodes/${id}`);
@@ -153,4 +157,55 @@ export interface SearchRequest {
   min_confidence?: number;
   characters?: string[];
   limit?: number;
+}
+
+// Shows
+export interface ShowSummary {
+  id: number;
+  name: string;
+  year: number | null;
+  network: string | null;
+  genres: string[];
+  poster_url: string | null;
+  fanart_url: string | null;
+  sonarr_id: number | null;
+  episode_count: number;
+}
+
+export interface ThemeConfig {
+  primary_color?: string;
+  secondary_color?: string;
+  accent_color?: string;
+  font?: string;
+  style?: string;
+}
+
+export interface ShowEpisode {
+  id: number;
+  title: string;
+  episode_number: number;
+  air_date: string | null;
+  overview: string | null;
+  status: string;
+  has_file: boolean;
+  duration_seconds: number | null;
+}
+
+export interface ShowDetail {
+  id: number;
+  name: string;
+  year: number | null;
+  network: string | null;
+  overview: string | null;
+  genres: string[];
+  poster_url: string | null;
+  fanart_url: string | null;
+  banner_url: string | null;
+  clearlogo_url: string | null;
+  rating_value: number | null;
+  rating_votes: number | null;
+  theme_config: ThemeConfig;
+  cutprint: { threshold: number; min_scene: number; genre: string } | null;
+  seasons: Record<string, ShowEpisode[]>;
+  total_episodes: number;
 }
