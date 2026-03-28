@@ -313,6 +313,65 @@ async def get_show_detail(show_id: int, db: AsyncSession = Depends(get_db)):
         "rating_value": show.rating_value,
         "rating_votes": show.rating_votes,
         "theme_config": show.theme_config,
+        "cutprint": {
+            "threshold": show.cutprint_threshold,
+            "min_scene": show.cutprint_min_scene,
+            "genre": show.cutprint_genre,
+            "calibrated_at": str(show.cutprint_calibrated_at) if show.cutprint_calibrated_at else None,
+            "profile": show.cutprint_profile,
+        } if show.cutprint_threshold else None,
         "seasons": seasons,
         "total_episodes": len(episodes),
     }
+
+
+# --- CutPrint™ Profile ---
+
+@router.post("/shows/{show_id}/cutprint")
+async def save_cutprint_profile(
+    show_id: int,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    """Store a CutPrint™ calibration profile for a show.
+
+    Body: the JSON output from cutprint_calibrate.py
+    """
+    result = await db.execute(select(Show).where(Show.id == show_id))
+    show = result.scalar_one_or_none()
+    if not show:
+        raise HTTPException(status_code=404, detail="Show not found")
+
+    from datetime import datetime, timezone
+    show.cutprint_threshold = body.get("threshold")
+    show.cutprint_min_scene = body.get("min_scene_duration")
+    show.cutprint_genre = body.get("genre")
+    show.cutprint_calibrated_at = datetime.now(timezone.utc)
+    show.cutprint_profile = body
+
+    await db.commit()
+    return {
+        "show_id": show.id,
+        "name": show.name,
+        "cutprint_threshold": show.cutprint_threshold,
+        "cutprint_min_scene": show.cutprint_min_scene,
+        "cutprint_genre": show.cutprint_genre,
+        "message": f"CutPrint™ profile saved for '{show.name}'"
+    }
+
+
+@router.get("/shows/{show_id}/cutprint")
+async def get_cutprint_profile(
+    show_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the CutPrint™ profile for a show."""
+    result = await db.execute(select(Show).where(Show.id == show_id))
+    show = result.scalar_one_or_none()
+    if not show:
+        raise HTTPException(status_code=404, detail="Show not found")
+
+    if not show.cutprint_threshold:
+        raise HTTPException(status_code=404, detail="No CutPrint™ profile for this show. Run calibration first.")
+
+    return show.cutprint_profile

@@ -27,6 +27,14 @@ class Show(Base):
     rating_value = Column(Float)          # TVDB/TMDB rating
     rating_votes = Column(Integer)        # Number of votes
     theme_config = Column(JSON, default={})
+
+    # CutPrint™ calibration profile
+    cutprint_threshold = Column(Float)
+    cutprint_min_scene = Column(Integer)
+    cutprint_genre = Column(String(50))
+    cutprint_calibrated_at = Column(DateTime(timezone=True))
+    cutprint_profile = Column(JSON)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     episodes = relationship("Episode", back_populates="show", cascade="all, delete-orphan")
