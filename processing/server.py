@@ -226,7 +226,7 @@ def run_pipeline(job_id: str, request: JobRequest):
         job["progress_pct"] = 15
         detect_cmd = [
             python, str(scripts_dir / "detect_scenes.py"),
-            str(compressed), str(scenes_json),
+            request.video_path, str(scenes_json),  # Use original video (1fps kills transitions)
         ]
         # Fetch CutPrint profile from Hetzner API if show_id provided
         if request.show_id:
