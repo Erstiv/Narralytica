@@ -59,7 +59,7 @@ function EpisodeRow({
           >
             Browse Scenes
           </a>
-        ) : episode.status === "pending" && episode.has_file ? (
+        ) : episode.status === "pending" ? (
           <button
             onClick={() => onProcess(episode.id)}
             className="text-xs bg-[var(--show-primary,#FFD521)] text-black px-3 py-1.5 rounded hover:opacity-80 transition font-medium"
@@ -236,7 +236,7 @@ export default function ShowDetailPage() {
         </div>
 
         {/* Batch process button */}
-        {currentEpisodes.some((ep) => ep.status === "pending" && ep.has_file) && (
+        {currentEpisodes.some((ep) => ep.status === "pending") && (
           <div className="pt-4 border-t border-gray-800">
             <button
               onClick={async () => {
