@@ -75,6 +75,7 @@ services:
     volumes:
       - ./processing:/app
       - ./docker-volumes/media:/data/media
+      - ./docker-volumes/hf-cache:/root/.cache/huggingface
 
   narralytica-frontend:
     build:
