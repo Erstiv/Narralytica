@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Narralytica: Full Indexing Pipeline (Run on M5 Mac)
+Narralytica: Full Indexing Pipeline (Run on Plex Mac)
 
-Runs the complete Phase 2/2.5 pipeline:
+Runs the complete pipeline:
+  0. CutPrint™ scene detection (if --show-id provided)
   1. Whisper transcription (parallel)  ─┐
   2. Gemini video analysis (parallel)  ─┤
   3. Merge transcripts (waits for 1+2) ─┘
@@ -11,16 +12,29 @@ Runs the complete Phase 2/2.5 pipeline:
 
 Usage:
     export GEMINI_API_KEY=your_key_here
-    python run_pipeline.py input/simpsons_s04e17.ogm processing/output/scenes.json
 
-Steps 1 and 2 run in parallel. Steps 3-5 are sequential.
+    # With CutPrint (fetches profile from API, runs scene detection automatically):
+    python run_pipeline.py video.mp4 --show-id 1 --episode-id 5
+
+    # Without CutPrint (provide pre-existing scenes JSON):
+    python run_pipeline.py video.mp4 --scenes-json scenes.json --episode-id 5
+
+    # With a local CutPrint profile file:
+    python run_pipeline.py video.mp4 --cutprint-profile cutprint_simpsons.json --episode-id 5
 """
 import subprocess
 import sys
 import os
+import json
 import time
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+try:
+    import httpx
+    HAS_HTTPX = True
+except ImportError:
+    HAS_HTTPX = False
 
 
 def run_step(name: str, cmd: list[str]) -> tuple[str, bool, str]:
@@ -41,10 +55,30 @@ def run_step(name: str, cmd: list[str]) -> tuple[str, bool, str]:
     return name, True, output
 
 
+def fetch_cutprint_profile(api_url: str, show_id: int) -> dict:
+    """Fetch a show's CutPrint profile from the Narralytica API."""
+    if not HAS_HTTPX:
+        print("ERROR: httpx not installed. Install it or use --cutprint-profile with a local file.")
+        sys.exit(1)
+
+    url = f"{api_url}/api/library/shows/{show_id}/cutprint"
+    print(f"Fetching CutPrint™ profile from {url}...")
+    r = httpx.get(url, timeout=10.0)
+    if r.status_code == 404:
+        print(f"ERROR: No CutPrint™ profile for show {show_id}. Run cutprint_calibrate.py first.")
+        sys.exit(1)
+    r.raise_for_status()
+    profile = r.json()
+    print(f"  Threshold: {profile.get('threshold')}, Min scene: {profile.get('min_scene_duration')}s, Genre: {profile.get('genre')}")
+    return profile
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run full Narralytica indexing pipeline")
-    parser.add_argument("original_video", help="Path to original video file (for Whisper)")
-    parser.add_argument("scenes_json", help="Path to scene boundaries JSON")
+    parser.add_argument("original_video", help="Path to original video file")
+    parser.add_argument("--scenes-json", help="Path to pre-existing scene boundaries JSON (skip CutPrint detection)")
+    parser.add_argument("--show-id", type=int, help="Show ID — fetches CutPrint profile from API and runs scene detection")
+    parser.add_argument("--cutprint-profile", help="Path to local CutPrint profile JSON (alternative to --show-id)")
     parser.add_argument("--compressed-video", default="processing/output/compressed.mp4",
                         help="Path to compressed video (for Gemini)")
     parser.add_argument("--episode-id", type=int, default=1)
@@ -58,7 +92,40 @@ def main():
         sys.exit(1)
 
     scripts_dir = os.path.dirname(os.path.abspath(__file__))
+    output_dir = "processing/output"
+    os.makedirs(output_dir, exist_ok=True)
     start_time = time.time()
+
+    # === STEP 0: CutPrint™ Scene Detection ===
+    scenes_json = args.scenes_json
+
+    if not scenes_json:
+        # Need to run scene detection
+        scenes_json = os.path.join(output_dir, "scenes.json")
+
+        detect_cmd = [
+            sys.executable, os.path.join(scripts_dir, "detect_scenes.py"),
+            args.original_video, scenes_json,
+        ]
+
+        if args.show_id:
+            # Fetch profile from API, write to temp file
+            profile = fetch_cutprint_profile(args.api_url, args.show_id)
+            profile_path = os.path.join(output_dir, "cutprint_profile.json")
+            with open(profile_path, "w") as f:
+                json.dump(profile, f, indent=2)
+            detect_cmd.extend(["--profile", profile_path])
+        elif args.cutprint_profile:
+            detect_cmd.extend(["--profile", args.cutprint_profile])
+        else:
+            print("WARNING: No CutPrint profile provided. Using default threshold (27) with no merge.")
+            print("         For better results, use --show-id or --cutprint-profile.")
+
+        name, success, _ = run_step("CutPrint™ Scene Detection", detect_cmd)
+        if not success:
+            sys.exit(1)
+    else:
+        print(f"Using pre-existing scenes: {scenes_json}")
 
     # === PARALLEL: Whisper + Gemini ===
     print("\n" + "=" * 60)
@@ -68,12 +135,12 @@ def main():
     whisper_cmd = [
         sys.executable, os.path.join(scripts_dir, "whisper_transcribe.py"),
         args.original_video,
-        "--output", "processing/output/whisper_transcript.json",
+        "--output", os.path.join(output_dir, "whisper_transcript.json"),
     ]
     gemini_cmd = [
         sys.executable, os.path.join(scripts_dir, "gemini_index.py"),
-        args.compressed_video, args.scenes_json,
-        "--output", "processing/output/scenes_gemini.json",
+        args.compressed_video, scenes_json,
+        "--output", os.path.join(output_dir, "scenes_gemini.json"),
     ]
 
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -98,9 +165,9 @@ def main():
     # Step 3: Merge
     name, success, _ = run_step("Transcript Merge", [
         sys.executable, os.path.join(scripts_dir, "merge_transcript.py"),
-        "processing/output/whisper_transcript.json",
-        "processing/output/scenes_gemini.json",
-        "--output", "processing/output/scenes_merged.json",
+        os.path.join(output_dir, "whisper_transcript.json"),
+        os.path.join(output_dir, "scenes_gemini.json"),
+        "--output", os.path.join(output_dir, "scenes_merged.json"),
     ])
     if not success:
         sys.exit(1)
@@ -108,8 +175,8 @@ def main():
     # Step 4: Embeddings
     name, success, _ = run_step("Generate Embeddings", [
         sys.executable, os.path.join(scripts_dir, "generate_embeddings.py"),
-        "processing/output/scenes_merged.json",
-        "--output", "processing/output/scenes_final.json",
+        os.path.join(output_dir, "scenes_merged.json"),
+        "--output", os.path.join(output_dir, "scenes_final.json"),
     ])
     if not success:
         sys.exit(1)
@@ -117,7 +184,7 @@ def main():
     # Step 5: Push to server
     name, success, _ = run_step("Push to Server", [
         sys.executable, os.path.join(scripts_dir, "push_scenes.py"),
-        "processing/output/scenes_final.json",
+        os.path.join(output_dir, "scenes_final.json"),
         "--episode-id", str(args.episode_id),
         "--api-url", args.api_url,
     ])
