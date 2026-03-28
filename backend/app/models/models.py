@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Text, ForeignKey, DateTime, JSON, UniqueConstraint
+from sqlalchemy import Boolean, Column, Integer, String, Float, Text, ForeignKey, DateTime, JSON, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector
