@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir \
     "scenedetect[opencv]" \
     faster-whisper \
     rapidfuzz \
-    google-generativeai
+    google-genai
 
 COPY . .
 
