@@ -20,7 +20,7 @@ import argparse
 from google import genai
 
 
-EMBEDDING_MODEL = "text-embedding-004"  # Google ecosystem, 1536 native dims, multilingual
+EMBEDDING_MODEL = "gemini-embedding-001"  # 3072 native dims, truncated to 1536 via output_dimensionality
 TASK_TYPE = "RETRIEVAL_DOCUMENT"  # Optimized for document storage (vs RETRIEVAL_QUERY for search)
 OUTPUT_DIMS = 1536  # Match pgvector column: vector(1536)
 

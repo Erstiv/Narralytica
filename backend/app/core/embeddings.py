@@ -8,7 +8,7 @@ Stays in the Google ecosystem with multilingual support.
 from google import genai
 from app.core.config import settings
 
-EMBEDDING_MODEL = "text-embedding-004"
+EMBEDDING_MODEL = "gemini-embedding-001"
 OUTPUT_DIMS = 1536
 
 _client = None
