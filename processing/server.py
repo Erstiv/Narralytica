@@ -28,6 +28,7 @@ import uuid
 import json
 import subprocess
 import threading
+import queue
 from datetime import datetime
 from pathlib import Path
 
@@ -37,12 +38,31 @@ from pydantic import BaseModel
 app = FastAPI(
     title="Narralytica Processing Server",
     description="Plex Mac pipeline runner — accepts jobs from Hetzner",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 # --- Job tracking ---
 
 jobs: dict[str, dict] = {}
+job_queue: queue.Queue = queue.Queue()
+
+
+def _queue_worker():
+    """Background worker that processes jobs sequentially from the queue."""
+    while True:
+        job_id, request = job_queue.get()
+        try:
+            run_pipeline(job_id, request)
+        except Exception as e:
+            jobs[job_id]["status"] = "failed"
+            jobs[job_id]["error"] = str(e)
+        finally:
+            job_queue.task_done()
+
+
+# Start the worker thread on import
+_worker_thread = threading.Thread(target=_queue_worker, daemon=True)
+_worker_thread.start()
 
 
 class JobRequest(BaseModel):
@@ -295,6 +315,8 @@ async def health():
         "ffmpeg": shutil.which("ffmpeg") is not None,
         "gemini_key_set": bool(os.environ.get("GEMINI_API_KEY")),
         "active_jobs": sum(1 for j in jobs.values() if j["status"] == "running"),
+        "queued_jobs": job_queue.qsize(),
+        "total_jobs": len(jobs),
     }
 
 
@@ -344,15 +366,15 @@ async def create_job(request: JobRequest):
         "elapsed_seconds": None,
     }
 
-    # Run pipeline in background thread
-    thread = threading.Thread(
-        target=run_pipeline,
-        args=(job_id, request),
-        daemon=True,
-    )
-    thread.start()
+    # Add to sequential processing queue
+    job_queue.put((job_id, request))
 
-    return {"job_id": job_id, "status": "queued", "message": "Pipeline started"}
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "queue_position": job_queue.qsize(),
+        "message": "Pipeline queued",
+    }
 
 
 @app.get("/jobs/{job_id}")

@@ -4,9 +4,12 @@ Narralytica: Processing router — dispatches pipeline jobs to Plex Mac.
 Sends job requests to the Plex processing server (via Tailscale) and
 proxies status checks. The Plex server does the heavy lifting (FFmpeg,
 Whisper, Gemini, embeddings) and pushes results back to the Hetzner API.
+
+Supports both single-episode and batch (full season) processing.
 """
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -104,3 +107,95 @@ async def list_processing_jobs():
 async def get_processing_job(job_id: str):
     """Check status of a specific processing job."""
     return await _plex_request("GET", f"/jobs/{job_id}")
+
+
+# --- Batch Processing ---
+
+class BatchRequest(BaseModel):
+    """Optional filters for batch processing."""
+    skip_indexed: bool = True  # Skip episodes already indexed
+
+
+@router.post("/season/{show_id}/{season}")
+async def start_season_processing(
+    show_id: int,
+    season: int,
+    body: BatchRequest = BatchRequest(),
+    db: AsyncSession = Depends(get_db),
+):
+    """Queue an entire season for processing.
+
+    Dispatches one job per episode to the Plex processing server.
+    Jobs run sequentially (the Plex server has a single-worker queue).
+    """
+    # Look up show
+    show_result = await db.execute(select(Show).where(Show.id == show_id))
+    show = show_result.scalar_one_or_none()
+    if not show:
+        raise HTTPException(status_code=404, detail="Show not found")
+
+    # Get all episodes for this season
+    result = await db.execute(
+        select(Episode)
+        .where(Episode.show_id == show_id, Episode.season == season)
+        .order_by(Episode.episode_number)
+    )
+    episodes = result.scalars().all()
+    if not episodes:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No episodes found for {show.name} Season {season}"
+        )
+
+    queued = []
+    skipped = []
+
+    for episode in episodes:
+        ep_label = f"S{episode.season:02d}E{episode.episode_number:02d}"
+
+        # Skip already-indexed episodes if requested
+        if body.skip_indexed and episode.status == "ready":
+            skipped.append({"episode_id": episode.id, "label": ep_label, "reason": "already indexed"})
+            continue
+
+        # Skip episodes currently processing
+        if episode.status == "processing":
+            skipped.append({"episode_id": episode.id, "label": ep_label, "reason": "already processing"})
+            continue
+
+        try:
+            job = await _plex_request("POST", "/jobs", json={
+                "episode_id": episode.id,
+                "show_id": show.id,
+                "video_path": "",
+                "api_url": "http://100.71.72.6:8005",
+                "show_name": show.name,
+                "season": episode.season,
+                "episode_number": episode.episode_number,
+            })
+
+            episode.status = "processing"
+            queued.append({
+                "episode_id": episode.id,
+                "label": ep_label,
+                "title": episode.title,
+                "job_id": job.get("job_id"),
+            })
+        except HTTPException as e:
+            skipped.append({
+                "episode_id": episode.id,
+                "label": ep_label,
+                "reason": f"dispatch failed: {e.detail[:100]}",
+            })
+
+    await db.commit()
+
+    return {
+        "show": show.name,
+        "season": season,
+        "queued": len(queued),
+        "skipped": len(skipped),
+        "jobs": queued,
+        "skipped_details": skipped,
+        "message": f"Queued {len(queued)} episodes for {show.name} Season {season}",
+    }
