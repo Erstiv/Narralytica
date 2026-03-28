@@ -164,7 +164,15 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-3xl font-bold text-simpsons-yellow">Admin</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold text-simpsons-yellow">Admin</h1>
+        <a
+          href="/admin/intake"
+          className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-5 py-2 rounded-lg text-sm transition flex items-center gap-2"
+        >
+          <span>+</span> Import &amp; Upload
+        </a>
+      </div>
 
       {/* Plex Server Status */}
       <section>

@@ -6,9 +6,11 @@ proxies status checks. The Plex server does the heavy lifting (FFmpeg,
 Whisper, Gemini, embeddings) and pushes results back to the Hetzner API.
 
 Supports both single-episode and batch (full season) processing.
+Also handles direct video file uploads for shows not in Sonarr.
 """
+import os
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -199,3 +201,108 @@ async def start_season_processing(
         "skipped_details": skipped,
         "message": f"Queued {len(queued)} episodes for {show.name} Season {season}",
     }
+
+
+# --- File Upload ---
+
+UPLOAD_DIR = os.path.join(settings.media_dir, "uploads")
+
+
+@router.post("/upload")
+async def upload_video(
+    file: UploadFile = File(...),
+    show_name: str = Form(...),
+    season: int = Form(1),
+    episode_number: int = Form(1),
+    episode_title: str = Form(""),
+    auto_process: bool = Form(False),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a video file directly for processing.
+
+    Creates (or finds) the show and episode records, saves the file to
+    the uploads directory, and optionally kicks off processing immediately.
+    Used for content not managed by Sonarr/Plex.
+    """
+    # Validate file type
+    allowed = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".ts"}
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(allowed))}"
+        )
+
+    # Find or create show
+    result = await db.execute(select(Show).where(Show.name == show_name))
+    show = result.scalar_one_or_none()
+    if not show:
+        show = Show(name=show_name, genres=[], theme_config={})
+        db.add(show)
+        await db.flush()
+
+    # Find or create episode
+    result = await db.execute(
+        select(Episode).where(
+            Episode.show_id == show.id,
+            Episode.season == season,
+            Episode.episode_number == episode_number,
+        )
+    )
+    episode = result.scalar_one_or_none()
+    if not episode:
+        episode = Episode(
+            show_id=show.id,
+            title=episode_title or f"Episode {episode_number}",
+            season=season,
+            episode_number=episode_number,
+            status="pending",
+        )
+        db.add(episode)
+        await db.flush()
+
+    # Save uploaded file
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    safe_name = f"s{show.id}_ep{episode.id}_{file.filename}"
+    save_path = os.path.join(UPLOAD_DIR, safe_name)
+
+    with open(save_path, "wb") as f:
+        while chunk := await file.read(1024 * 1024):  # 1MB chunks
+            f.write(chunk)
+
+    episode.file_path = save_path
+    await db.commit()
+
+    file_size_mb = round(os.path.getsize(save_path) / (1024 * 1024), 1)
+
+    resp = {
+        "show_id": show.id,
+        "show_name": show.name,
+        "episode_id": episode.id,
+        "episode_title": episode.title,
+        "file_path": save_path,
+        "file_size_mb": file_size_mb,
+        "message": f"Uploaded {file.filename} ({file_size_mb} MB) → S{season:02d}E{episode_number:02d}",
+    }
+
+    # Optionally kick off processing
+    if auto_process:
+        try:
+            job = await _plex_request("POST", "/jobs", json={
+                "episode_id": episode.id,
+                "show_id": show.id,
+                "video_path": save_path,
+                "api_url": "http://100.71.72.6:8005",
+                "show_name": show.name,
+                "season": episode.season,
+                "episode_number": episode.episode_number,
+            })
+            episode.status = "processing"
+            await db.commit()
+            resp["job_id"] = job.get("job_id")
+            resp["processing"] = True
+        except HTTPException:
+            resp["processing"] = False
+            resp["processing_error"] = "Failed to dispatch to Plex server"
+
+    return resp

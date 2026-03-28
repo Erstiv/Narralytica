@@ -226,3 +226,100 @@ export interface ShowDetail {
   seasons: Record<string, ShowEpisode[]>;
   total_episodes: number;
 }
+
+// --- Sonarr Library Browser ---
+export interface SonarrShow {
+  sonarr_id: number;
+  tvdb_id: number | null;
+  title: string;
+  year: number | null;
+  network: string | null;
+  genres: string[];
+  season_count: number;
+  episode_count: number;
+  episode_file_count: number;
+  overview: string;
+  poster_url: string | null;
+  fanart_url: string | null;
+  path: string | null;
+  rating: number | null;
+}
+
+export interface SonarrEpisode {
+  sonarr_episode_id: number;
+  title: string;
+  season: number;
+  episode_number: number;
+  air_date: string | null;
+  overview: string | null;
+  has_file: boolean;
+  file_path: string | null;
+  file_size_mb: number | null;
+  runtime: number | null;
+}
+
+export const browseSonarrShows = (q?: string) =>
+  fetchAPI<{ count: number; shows: SonarrShow[] }>(
+    `/library/sonarr/shows${q ? `?q=${encodeURIComponent(q)}` : ""}`
+  );
+
+export const browseSonarrEpisodes = (sonarrId: number, season?: number) =>
+  fetchAPI<{ count: number; episodes: SonarrEpisode[] }>(
+    `/library/sonarr/shows/${sonarrId}/episodes${season != null ? `?season=${season}` : ""}`
+  );
+
+export const importShowFromSonarr = (sonarrId: number) =>
+  fetchAPI<{
+    show_id: number;
+    name: string;
+    sonarr_id: number;
+    episodes_created: number;
+    episodes_updated: number;
+    message: string;
+  }>(`/library/import/${sonarrId}`, { method: "POST" });
+
+export const startSeasonProcessing = (showId: number, season: number, skipIndexed = true) =>
+  fetchAPI<{
+    show: string;
+    season: number;
+    queued: number;
+    skipped: number;
+    message: string;
+  }>(`/process/season/${showId}/${season}`, {
+    method: "POST",
+    body: JSON.stringify({ skip_indexed: skipIndexed }),
+  });
+
+export async function uploadVideo(
+  file: File,
+  showName: string,
+  season: number,
+  episodeNumber: number,
+  episodeTitle: string,
+  autoProcess: boolean,
+): Promise<{
+  show_id: number;
+  episode_id: number;
+  file_size_mb: number;
+  message: string;
+  job_id?: string;
+  processing?: boolean;
+}> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("show_name", showName);
+  formData.append("season", String(season));
+  formData.append("episode_number", String(episodeNumber));
+  formData.append("episode_title", episodeTitle);
+  formData.append("auto_process", String(autoProcess));
+
+  const res = await fetch(`${API_URL}/api/process/upload`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `Upload failed: ${res.status}`);
+  }
+  return res.json();
+}
