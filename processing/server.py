@@ -76,11 +76,13 @@ class JobRequest(BaseModel):
     episode_number: int = 0
 
 
-# Media search paths on Plex Mac (ordered by preference)
-# Chaos is listed first as it's the primary TV drive
-PLEX_TV_PATHS = [
-    "/Volumes/Chaos/TV Shows",
-    "/Volumes/Luchagaido/TV Shows",
+# Media search paths (ordered by preference)
+# /data/media is the Docker volume mount on Hetzner
+# /Volumes paths are Plex Mac drives
+MEDIA_SEARCH_PATHS = [
+    "/data/media/uploads",       # Hetzner Docker volume (uploaded files)
+    "/Volumes/Chaos/TV Shows",   # Plex Mac primary drive
+    "/Volumes/Luchagaido/TV Shows",  # Plex Mac secondary drive
 ]
 
 
@@ -95,7 +97,7 @@ def find_episode_file(show_name: str, season: int, episode_number: int) -> str |
     import signal
 
     def _search():
-        for base in PLEX_TV_PATHS:
+        for base in MEDIA_SEARCH_PATHS:
             show_dir = Path(base) / show_name
             try:
                 if not show_dir.exists():
@@ -399,7 +401,7 @@ def create_job(request: JobRequest):
             raise HTTPException(
                 status_code=404,
                 detail=f"Could not find {request.show_name} S{request.season:02d}E{request.episode_number:02d} "
-                       f"on disk. Searched: {', '.join(PLEX_TV_PATHS)}"
+                       f"on disk. Searched: {', '.join(MEDIA_SEARCH_PATHS)}"
             )
 
     # Validate video path exists

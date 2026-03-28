@@ -22,6 +22,17 @@ from app.models.models import Episode, Show
 router = APIRouter(prefix="/process", tags=["processing"])
 
 
+def _translate_path_for_processing(backend_path: str) -> str:
+    """Translate backend container paths to processing container paths.
+
+    Backend mounts media at /app/media, processing mounts same volume at /data/media.
+    Plex Mac paths (/Volumes/...) pass through unchanged.
+    """
+    if backend_path.startswith("/app/media/"):
+        return backend_path.replace("/app/media/", "/data/media/", 1)
+    return backend_path
+
+
 async def _plex_request(method: str, path: str, **kwargs) -> dict:
     """Make a request to the Plex processing server."""
     url = f"{settings.plex_processing_url}{path}"
@@ -74,8 +85,8 @@ async def start_processing(
     job = await _plex_request("POST", "/jobs", json={
         "episode_id": episode.id,
         "show_id": show.id,
-        "video_path": episode.file_path or "",
-        "api_url": "http://100.71.72.6:8005",  # Hetzner's Tailscale IP
+        "video_path": _translate_path_for_processing(episode.file_path or ""),
+        "api_url": settings.api_callback_url,
         "show_name": show.name,
         "season": episode.season,
         "episode_number": episode.episode_number,
@@ -175,7 +186,7 @@ async def start_season_processing(
             job = await _plex_request("POST", "/jobs", json={
                 "episode_id": episode.id,
                 "show_id": show.id,
-                "video_path": episode.file_path or "",
+                "video_path": _translate_path_for_processing(episode.file_path or ""),
                 "api_url": "http://100.71.72.6:8005",
                 "show_name": show.name,
                 "season": episode.season,
@@ -297,7 +308,7 @@ async def upload_video(
             job = await _plex_request("POST", "/jobs", json={
                 "episode_id": episode.id,
                 "show_id": show.id,
-                "video_path": save_path,
+                "video_path": _translate_path_for_processing(save_path),
                 "api_url": "http://100.71.72.6:8005",
                 "show_name": show.name,
                 "season": episode.season,

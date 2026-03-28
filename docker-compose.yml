@@ -36,7 +36,7 @@ services:
       SONARR_API_KEY: ${SONARR_API_KEY:-}
       RADARR_URL: http://host.docker.internal:7878
       RADARR_API_KEY: ${RADARR_API_KEY:-}
-      PLEX_PROCESSING_URL: ${PLEX_PROCESSING_URL:-http://100.108.190.10:8006}
+      PLEX_PROCESSING_URL: ${PLEX_PROCESSING_URL:-http://narralytica-processing:8006}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -61,6 +61,20 @@ services:
     volumes:
       - ./backend:/app
       - ./docker-volumes/media:/app/media
+
+  narralytica-processing:
+    build:
+      context: ./processing
+      dockerfile: Dockerfile
+    container_name: narralytica-processing
+    restart: unless-stopped
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    ports:
+      - "8006:8006"
+    volumes:
+      - ./processing:/app
+      - ./docker-volumes/media:/data/media
 
   narralytica-frontend:
     build:
