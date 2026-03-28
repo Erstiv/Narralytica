@@ -38,9 +38,19 @@ async def bulk_create_scenes(
     for old_scene in existing.scalars().all():
         await db.delete(old_scene)
 
+    def _to_str(val):
+        """Coerce lists/dicts to string for Text columns. Gemini sometimes returns lists."""
+        if val is None:
+            return None
+        if isinstance(val, list):
+            return "; ".join(str(v) for v in val)
+        if isinstance(val, dict):
+            return str(val)
+        return val
+
     created = 0
     for scene_data in body.scenes:
-        # Extract embedding if present (768-dim float list from generate_embeddings.py)
+        # Extract embedding if present
         embedding = scene_data.get("description_embedding")
 
         scene = Scene(
@@ -52,12 +62,12 @@ async def bulk_create_scenes(
             characters_present=scene_data.get("characters_present", []),
             key_dialog=scene_data.get("key_dialog", []),
             character_interactions=scene_data.get("character_interactions", []),
-            character_motivations_feelings=scene_data.get("character_motivations_feelings"),
+            character_motivations_feelings=_to_str(scene_data.get("character_motivations_feelings")),
             # Actions & Humor
-            actions=scene_data.get("actions"),
-            interactions=scene_data.get("interactions"),
-            visual_gags=scene_data.get("visual_gags"),
-            dialog_based_humor=scene_data.get("dialog_based_humor"),
+            actions=_to_str(scene_data.get("actions")),
+            interactions=_to_str(scene_data.get("interactions")),
+            visual_gags=_to_str(scene_data.get("visual_gags")),
+            dialog_based_humor=_to_str(scene_data.get("dialog_based_humor")),
             # Location & Setting
             location=scene_data.get("location"),
             time_of_day=scene_data.get("time_of_day"),
@@ -65,27 +75,27 @@ async def bulk_create_scenes(
             background=scene_data.get("background"),
             # Visual & Cinematographic
             color_palette=scene_data.get("color_palette", []),
-            lighting=scene_data.get("lighting"),
-            camera_shot_type=scene_data.get("camera_shot_type"),
-            camera_movement=scene_data.get("camera_movement"),
-            scene_composition=scene_data.get("scene_composition"),
-            visual_style_notes=scene_data.get("visual_style_notes"),
+            lighting=_to_str(scene_data.get("lighting")),
+            camera_shot_type=_to_str(scene_data.get("camera_shot_type")),
+            camera_movement=_to_str(scene_data.get("camera_movement")),
+            scene_composition=_to_str(scene_data.get("scene_composition")),
+            visual_style_notes=_to_str(scene_data.get("visual_style_notes")),
             # Audio & Music
             music_present=bool(scene_data.get("music_present")) if scene_data.get("music_present") is not None else None,
-            music_description=scene_data.get("music_description"),
-            sound_effects=scene_data.get("sound_effects"),
-            ambient_audio=scene_data.get("ambient_audio"),
+            music_description=_to_str(scene_data.get("music_description")),
+            sound_effects=_to_str(scene_data.get("sound_effects")),
+            ambient_audio=_to_str(scene_data.get("ambient_audio")),
             # Mood & Tone
-            mood_ambience=scene_data.get("mood_ambience"),
-            scene_pacing=scene_data.get("scene_pacing"),
-            tone=scene_data.get("tone"),
-            emotional_arc=scene_data.get("emotional_arc"),
+            mood_ambience=_to_str(scene_data.get("mood_ambience")),
+            scene_pacing=_to_str(scene_data.get("scene_pacing")),
+            tone=_to_str(scene_data.get("tone")),
+            emotional_arc=_to_str(scene_data.get("emotional_arc")),
             # Narrative & Context
             tropes_memes=scene_data.get("tropes_memes", []),
             cultural_references=scene_data.get("cultural_references", []),
-            recurring_gags=scene_data.get("recurring_gags"),
-            plot_significance=scene_data.get("plot_significance"),
-            continuity_notes=scene_data.get("continuity_notes"),
+            recurring_gags=_to_str(scene_data.get("recurring_gags")),
+            plot_significance=_to_str(scene_data.get("plot_significance")),
+            continuity_notes=_to_str(scene_data.get("continuity_notes")),
             # Explicitness (5 dimensions)
             explicitness=scene_data.get("explicitness", "none"),
             explicitness_language=scene_data.get("explicitness_language", 0),
@@ -94,8 +104,8 @@ async def bulk_create_scenes(
             explicitness_substance=scene_data.get("explicitness_substance", 0),
             explicitness_thematic=scene_data.get("explicitness_thematic", 0),
             # Scene Structure
-            scene_transitions=scene_data.get("scene_transitions"),
-            text_on_screen=scene_data.get("text_on_screen"),
+            scene_transitions=_to_str(scene_data.get("scene_transitions")),
+            text_on_screen=_to_str(scene_data.get("text_on_screen")),
             # Search & Meta
             overall_confidence=scene_data.get("overall_scene_confidence", 0),
             description_text=scene_data.get("description_text"),
