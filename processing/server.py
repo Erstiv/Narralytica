@@ -323,9 +323,14 @@ async def health():
 @app.post("/jobs")
 async def create_job(request: JobRequest):
     """Start a new processing job."""
+    import asyncio
+
     # If no explicit path, search for the file by show/season/episode
+    # Run in thread executor to avoid blocking the async event loop
     if not request.video_path and request.show_name and request.season and request.episode_number:
-        found = find_episode_file(request.show_name, request.season, request.episode_number)
+        found = await asyncio.to_thread(
+            find_episode_file, request.show_name, request.season, request.episode_number
+        )
         if found:
             request.video_path = found
         else:
@@ -335,8 +340,9 @@ async def create_job(request: JobRequest):
                        f"on disk. Searched: {', '.join(PLEX_TV_PATHS)}"
             )
 
-    # Validate video path exists
-    if not request.video_path or not Path(request.video_path).exists():
+    # Validate video path exists (run in thread to avoid blocking)
+    path_exists = await asyncio.to_thread(lambda: Path(request.video_path).exists()) if request.video_path else False
+    if not request.video_path or not path_exists:
         raise HTTPException(
             status_code=400,
             detail=f"Video file not found: {request.video_path}"
