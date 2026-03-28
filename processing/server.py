@@ -77,9 +77,10 @@ class JobRequest(BaseModel):
 
 
 # Media search paths on Plex Mac (ordered by preference)
+# Chaos is listed first as it's the primary TV drive
 PLEX_TV_PATHS = [
-    "/Volumes/Luchagaido/TV Shows",
     "/Volumes/Chaos/TV Shows",
+    "/Volumes/Luchagaido/TV Shows",
 ]
 
 
@@ -88,36 +89,56 @@ def find_episode_file(show_name: str, season: int, episode_number: int) -> str |
 
     Looks through all configured TV paths for files matching the show,
     season, and episode number. Handles various naming conventions.
+    Uses a timeout to prevent hanging on slow/unresponsive volumes.
     """
-    import glob
     import re
+    import signal
 
-    for base in PLEX_TV_PATHS:
-        show_dir = Path(base) / show_name
-        if not show_dir.exists():
-            continue
-
-        # Check season directories
-        for season_dir_name in [f"Season {season:02d}", f"Season {season}"]:
-            season_dir = show_dir / season_dir_name
-            if not season_dir.exists():
+    def _search():
+        for base in PLEX_TV_PATHS:
+            show_dir = Path(base) / show_name
+            try:
+                if not show_dir.exists():
+                    continue
+            except OSError:
                 continue
 
-            # Search for files matching this episode number
-            for f in season_dir.iterdir():
-                if f.is_file() and f.suffix.lower() in ('.mkv', '.mp4', '.avi', '.ogm', '.ts', '.m4v'):
-                    name = f.name.lower()
-                    # Match patterns: S04E17, 04x17, s4e17, etc.
-                    patterns = [
-                        rf's0*{season}e0*{episode_number}\b',
-                        rf'0*{season}x0*{episode_number}\b',
-                        rf'[- .]0*{episode_number}[- .]',
-                    ]
-                    for pattern in patterns:
-                        if re.search(pattern, name, re.IGNORECASE):
-                            return str(f)
+            # Check season directories
+            for season_dir_name in [f"Season {season:02d}", f"Season {season}"]:
+                season_dir = show_dir / season_dir_name
+                try:
+                    if not season_dir.exists():
+                        continue
+                except OSError:
+                    continue
 
-    return None
+                try:
+                    for f in season_dir.iterdir():
+                        if f.is_file() and f.suffix.lower() in ('.mkv', '.mp4', '.avi', '.ogm', '.ts', '.m4v'):
+                            name = f.name.lower()
+                            patterns = [
+                                rf's0*{season}e0*{episode_number}\b',
+                                rf'0*{season}x0*{episode_number}\b',
+                                rf'[- .]0*{episode_number}[- .]',
+                            ]
+                            for pattern in patterns:
+                                if re.search(pattern, name, re.IGNORECASE):
+                                    return str(f)
+                except OSError:
+                    continue
+
+        return None
+
+    # Run with a 10-second timeout to prevent hanging on unresponsive volumes
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        try:
+            future = pool.submit(_search)
+            return future.result(timeout=10)
+        except FuturesTimeout:
+            return None
+        except Exception:
+            return None
 
 
 class JobStatus(BaseModel):
