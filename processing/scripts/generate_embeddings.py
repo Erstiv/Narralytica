@@ -29,7 +29,8 @@ def build_embedding_text(scene: dict) -> str:
     """Build a rich text string for embedding from all scene fields.
 
     Combines description_text with key structured fields so the vector
-    captures characters, dialog, mood, and actions — not just the summary.
+    captures characters, dialog, mood, actions, location, humor, and
+    cultural context — maximizing semantic search quality.
     """
     parts = []
 
@@ -42,27 +43,70 @@ def build_embedding_text(scene: dict) -> str:
     if scene.get("mood_ambience"):
         parts.append(f"Mood: {scene['mood_ambience']}")
 
+    if scene.get("tone"):
+        parts.append(f"Tone: {scene['tone']}")
+
+    if scene.get("emotional_arc"):
+        parts.append(f"Emotional arc: {scene['emotional_arc']}")
+
     if scene.get("characters_present"):
         names = [c["name"] for c in scene["characters_present"] if isinstance(c, dict)]
         if names:
             parts.append(f"Characters: {', '.join(names)}")
 
+    if scene.get("character_motivations_feelings"):
+        parts.append(f"Motivations: {scene['character_motivations_feelings']}")
+
     if scene.get("key_dialog"):
         quotes = []
-        for d in scene["key_dialog"][:3]:  # Top 3 quotes
+        for d in scene["key_dialog"][:5]:  # Top 5 quotes (was 3)
             if isinstance(d, dict) and d.get("quote"):
                 speaker = d.get("speaker", "Unknown")
-                quotes.append(f'{speaker}: "{d["quote"]}"')
+                emotion = f" ({d['emotion']})" if d.get("emotion") else ""
+                quotes.append(f'{speaker}{emotion}: "{d["quote"]}"')
         if quotes:
             parts.append("Dialog: " + " | ".join(quotes))
 
+    # Location info
+    location_parts = []
+    if scene.get("location"):
+        location_parts.append(scene["location"])
     if scene.get("background"):
-        parts.append(f"Setting: {scene['background']}")
+        location_parts.append(scene["background"])
+    if scene.get("setting_type"):
+        location_parts.append(scene["setting_type"])
+    if location_parts:
+        parts.append(f"Setting: {', '.join(location_parts)}")
 
     if scene.get("objects_present"):
-        obj_names = [o["name"] for o in scene["objects_present"] if isinstance(o, dict)]
-        if obj_names:
-            parts.append(f"Objects: {', '.join(obj_names)}")
+        obj_descs = []
+        for o in scene["objects_present"]:
+            if isinstance(o, dict):
+                desc = o.get("name", "")
+                if o.get("state"):
+                    desc += f" ({o['state']})"
+                obj_descs.append(desc)
+        if obj_descs:
+            parts.append(f"Objects: {', '.join(obj_descs)}")
+
+    # Humor and gags
+    if scene.get("visual_gags"):
+        parts.append(f"Visual gags: {scene['visual_gags']}")
+    if scene.get("dialog_based_humor"):
+        parts.append(f"Humor: {scene['dialog_based_humor']}")
+
+    # Cultural context
+    if scene.get("cultural_references"):
+        refs = scene["cultural_references"]
+        if isinstance(refs, list) and refs:
+            parts.append(f"References: {', '.join(str(r) for r in refs)}")
+    if scene.get("tropes_memes"):
+        tropes = scene["tropes_memes"]
+        if isinstance(tropes, list) and tropes:
+            parts.append(f"Tropes: {', '.join(str(t) for t in tropes)}")
+
+    if scene.get("music_description"):
+        parts.append(f"Music: {scene['music_description']}")
 
     return " ".join(parts)
 

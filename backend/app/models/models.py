@@ -65,17 +65,68 @@ class Scene(Base):
     start_timestamp = Column(Float, nullable=False)
     end_timestamp = Column(Float, nullable=False)
     duration = Column(Float, nullable=False)
-    characters_present = Column(JSON, default=[])
-    key_dialog = Column(JSON, default=[])
+
+    # Characters & Dialog
+    characters_present = Column(JSON, default=[])         # [{name, confidence, is_speaking, screen_position}]
+    key_dialog = Column(JSON, default=[])                 # [{speaker, quote, timestamp, emotion, volume_level}]
+    character_interactions = Column(JSON, default=[])      # [{character_a, character_b, interaction_type, description}]
+    character_motivations_feelings = Column(Text)
+
+    # Actions & Humor
     actions = Column(Text)
-    interactions = Column(Text)
+    interactions = Column(Text)                           # Legacy field (kept for backward compat)
+    visual_gags = Column(Text)
+    dialog_based_humor = Column(Text)
+
+    # Objects
+    # objects_present now includes: state, spatial_relationship (via scene_objects table + raw JSON)
+
+    # Location & Setting
+    location = Column(Text)                               # Specific named location
+    time_of_day = Column(String(20))                      # morning, afternoon, evening, night, ambiguous
+    setting_type = Column(String(20))                     # interior, exterior, both
+    background = Column(Text)                             # Legacy field
+
+    # Visual & Cinematographic
+    color_palette = Column(JSON, default=[])              # Hex color codes
+    lighting = Column(Text)
+    camera_shot_type = Column(Text)
+    camera_movement = Column(Text)
+    scene_composition = Column(Text)
+    visual_style_notes = Column(Text)
+
+    # Audio & Music
+    music_present = Column(JSON)                          # Boolean stored as JSON for null safety
+    music_description = Column(Text)
+    sound_effects = Column(Text)
+    ambient_audio = Column(Text)
+
+    # Mood & Tone
     mood_ambience = Column(Text)
-    color_palette = Column(JSON, default=[])
+    scene_pacing = Column(String(30))                     # fast, moderate, slow, building, frenetic
+    tone = Column(String(50))                             # comedic, dramatic, tense, etc.
+    emotional_arc = Column(Text)
+
+    # Narrative & Context
     tropes_memes = Column(JSON, default=[])
-    explicitness = Column(String(50), default="none")
-    background = Column(Text)
+    cultural_references = Column(JSON, default=[])
+    recurring_gags = Column(Text)
+    plot_significance = Column(String(20))                # low, medium, high, critical
+    continuity_notes = Column(Text)
+
+    # Explicitness (5 dimensions)
+    explicitness = Column(String(50), default="none")     # Legacy single field
+    explicitness_language = Column(Float, default=0)
+    explicitness_violence = Column(Float, default=0)
+    explicitness_sexual = Column(Float, default=0)
+    explicitness_substance = Column(Float, default=0)
+    explicitness_thematic = Column(Float, default=0)
+
+    # Scene Structure
     scene_transitions = Column(Text)
-    motivations_feelings = Column(Text)
+    text_on_screen = Column(Text)
+
+    # Search & Storage
     overall_confidence = Column(Float, default=0)
     thumbnail_path = Column(Text)
     description_embedding = Column(Vector(1536))
