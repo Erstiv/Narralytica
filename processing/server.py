@@ -48,6 +48,7 @@ jobs: dict[str, dict] = {}
 class JobRequest(BaseModel):
     """Request to process an episode."""
     episode_id: int
+    show_id: int = 0             # Show ID for CutPrint profile lookup
     video_path: str = ""         # Absolute path on Plex Mac filesystem (optional if show/season/ep provided)
     api_url: str = "http://178.156.251.26:8005"  # Hetzner API URL
     show_name: str = ""
@@ -161,14 +162,29 @@ def run_pipeline(job_id: str, request: JobRequest):
         if result.returncode != 0:
             raise RuntimeError(f"Compress failed: {result.stderr[:500]}")
 
-        # Step 2: Detect scenes (positional args: video output [threshold])
+        # Step 2: Detect scenes with CutPrint™ profile
         job["current_step"] = "detect"
         job["progress_pct"] = 15
-        result = subprocess.run(
-            [python, str(scripts_dir / "detect_scenes.py"),
-             str(compressed), str(scenes_json)],
-            capture_output=True, text=True, env=env
-        )
+        detect_cmd = [
+            python, str(scripts_dir / "detect_scenes.py"),
+            str(compressed), str(scenes_json),
+        ]
+        # Fetch CutPrint profile from Hetzner API if show_id provided
+        if request.show_id:
+            try:
+                import httpx
+                r = httpx.get(f"{request.api_url}/api/library/shows/{request.show_id}/cutprint", timeout=10.0)
+                if r.status_code == 200:
+                    profile_path = work_dir / "cutprint_profile.json"
+                    profile_path.write_text(json.dumps(r.json(), indent=2))
+                    detect_cmd.extend(["--profile", str(profile_path)])
+                    job["cutprint"] = "loaded"
+                else:
+                    job["cutprint"] = "not_found (using defaults)"
+            except Exception as e:
+                job["cutprint"] = f"fetch_error: {e}"
+
+        result = subprocess.run(detect_cmd, capture_output=True, text=True, env=env)
         if result.returncode != 0:
             raise RuntimeError(f"Scene detection failed: {result.stderr[:500]}")
 
@@ -318,6 +334,7 @@ async def create_job(request: JobRequest):
         "job_id": job_id,
         "status": "queued",
         "episode_id": request.episode_id,
+        "show_id": request.show_id,
         "video_path": request.video_path,
         "current_step": "queued",
         "progress_pct": 0,
