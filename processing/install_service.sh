@@ -54,7 +54,7 @@ cat > "$PLIST_PATH" << PLIST
         <key>GEMINI_API_KEY</key>
         <string>${GEMINI_KEY}</string>
         <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/jers/narralytica-venv/bin</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>

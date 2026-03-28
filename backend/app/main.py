@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
-from app.api import episodes, scenes, search, exports, library
+from app.api import episodes, scenes, search, exports, library, processing
 
 app = FastAPI(
     title="Narralytica API",
@@ -29,6 +29,7 @@ app.include_router(scenes.router, prefix="/api")
 app.include_router(search.router, prefix="/api")
 app.include_router(exports.router, prefix="/api")
 app.include_router(library.router, prefix="/api")
+app.include_router(processing.router, prefix="/api")
 
 # Serve extracted media (thumbnails + clips) from /app/media
 app.mount("/api/media", StaticFiles(directory=settings.media_dir), name="media")
