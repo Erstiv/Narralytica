@@ -1,9 +1,9 @@
-# Narralytica v2 — Handoff (Updated 2026-03-28)
+# Narralytica v2 — Handoff (Updated 2026-04-05)
 
 ## Quick Start
 ```bash
 # Read this file first, then check the Master Brief and Errata in ~/Downloads/
-# The project is live at https://captainofindustries.com
+# The project is live at https://weftwarp.com (also https://captainofindustries.com)
 # GitHub: https://github.com/Erstiv/Narralytica
 ```
 
@@ -186,11 +186,26 @@ ssh filou "ssh jers@100.108.190.10 'cd /Users/jers/narralytica && git pull'"
 
 ## What's Next
 
-### Immediate (finish Session 3 work)
-1. Check CutPrint calibration result on Plex Mac (`/tmp/cutprint_simpsons.json`), save to DB
-2. Calibrate Danger 5 (proves cross-genre CutPrint)
-3. Install remaining pip packages on Plex Mac venv
-4. Wire CutPrint into automated pipeline (look up show profile, pass to detect_scenes)
+### Immediate Priority
+1. **Video previews don't play** — Homestead (333 scenes), Wayfinders (386), and Wingfeather (200) all have full Gemini analysis + embeddings but NO thumbnails or video clips extracted. The `extract_media.py` script needs to be run for each show. This requires access to the original video files on the Plex Mac.
+2. Check CutPrint calibration result on Plex Mac (`/tmp/cutprint_simpsons.json`), save to DB
+3. Calibrate Danger 5 (proves cross-genre CutPrint)
+4. Install remaining pip packages on Plex Mac venv
+
+### Current State of All Shows
+| Show | Episodes | Scenes | Status | Video Clips |
+|------|----------|--------|--------|-------------|
+| Homestead | 8/8 ready | 333 | ✅ Fully indexed | ❌ No clips/thumbs |
+| Wayfinders | 6/6 ready | 386 | ✅ Fully indexed | ❌ No clips/thumbs |
+| Wingfeather Saga | 6/6 ready | 200 | ✅ Fully indexed | ❌ No clips/thumbs |
+| Simpsons | 1/801 ready | 25 | POC only | ❌ No clips/thumbs |
+| Danger 5 | 0/13 ready | 0 | Not started | ❌ |
+
+### Domain Setup
+- **weftwarp.com** — Primary domain, SSL via Let's Encrypt, nginx on Filou
+- **captainofindustries.com** — Also works (legacy domain)
+- Frontend env `BACKEND_URL` is set to `https://weftwarp.com` in `.env` on Hetzner
+- CORS allows both domains
 
 ### Stage C (from Master Brief)
 - Build Plex-side FastAPI processing server (receives jobs from Hetzner via Tailscale)
