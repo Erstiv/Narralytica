@@ -150,6 +150,10 @@ export interface Scene {
 export interface SearchResult {
   scene: Scene;
   similarity: number;
+  show_name?: string;
+  episode_title?: string;
+  episode_label?: string;
+  match_reason?: string;
 }
 
 export interface SearchRequest {
@@ -480,3 +484,48 @@ export const getSimilarScenes = (sceneId: number) =>
 
 export const getEpisodeOverview = (episodeId: number) =>
   fetchAPI<EpisodeOverview>(`/analytics/episode-overview/${episodeId}`);
+
+// --- Reports ---
+export interface ReportRequest {
+  scope: "episode" | "season";
+  episode_id?: number;
+  show_id?: number;
+  season?: number;
+  report_types: string[];
+  nl_query?: string;
+  format: "preview" | "docx";
+}
+
+export interface ReportSection {
+  type: string;
+  title: string;
+  [key: string]: unknown;
+}
+
+export interface ReportPreview {
+  title: string;
+  sections: ReportSection[];
+}
+
+export const generateReportPreview = (req: ReportRequest) =>
+  fetchAPI<ReportPreview>("/reports/generate", {
+    method: "POST",
+    body: JSON.stringify({ ...req, format: "preview" }),
+  });
+
+export async function downloadReport(req: ReportRequest): Promise<void> {
+  const url = `${API_URL}/api/reports/generate`;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...req, format: "docx" }),
+  });
+  if (!resp.ok) throw new Error(`Download failed: ${resp.status}`);
+  const blob = await resp.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  const disposition = resp.headers.get("Content-Disposition");
+  a.download = disposition?.match(/filename="(.+)"/)?.[1] || "report.docx";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}

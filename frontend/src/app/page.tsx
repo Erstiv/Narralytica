@@ -120,7 +120,7 @@ export default function SplashPage() {
   );
 
   const hero = shows.length > 0
-    ? shows.reduce((a, b) => (a.episode_count > b.episode_count ? a : b))
+    ? shows.find(s => s.name.toLowerCase().includes("homestead")) || shows.reduce((a, b) => (a.episode_count > b.episode_count ? a : b))
     : null;
 
   return (

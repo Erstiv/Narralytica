@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
-from app.api import episodes, scenes, search, exports, library, processing, tweaks, analytics
+from app.api import episodes, scenes, search, exports, library, processing, tweaks, analytics, media, reports
 
 app = FastAPI(
     title="Narralytica API",
@@ -18,6 +18,8 @@ app.add_middleware(
         "http://localhost:3001",
         "http://localhost:3000",
         "https://captainofindustries.com",
+        "https://weftwarp.com",
+        "http://weftwarp.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -32,9 +34,11 @@ app.include_router(library.router, prefix="/api")
 app.include_router(processing.router, prefix="/api")
 app.include_router(tweaks.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
+app.include_router(media.router, prefix="/api")
+app.include_router(reports.router, prefix="/api")
 
 # Serve extracted media (thumbnails + clips) from /app/media
-app.mount("/api/media", StaticFiles(directory=settings.media_dir), name="media")
+app.mount("/api/media-static", StaticFiles(directory=settings.media_dir), name="media-static")
 
 
 @app.get("/api/health")

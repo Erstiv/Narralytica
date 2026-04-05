@@ -138,7 +138,7 @@ function EpisodePicker({
 // =============================================================================
 // Mood Timeline Chart
 // =============================================================================
-function MoodTimeline({ data }: { data: MoodTimelineEntry[] }) {
+function MoodTimeline({ data, onSceneClick }: { data: MoodTimelineEntry[]; onSceneClick?: (sceneId: number) => void }) {
   if (!data.length) return null;
   const maxTime = data[data.length - 1].end;
 
@@ -160,8 +160,10 @@ function MoodTimeline({ data }: { data: MoodTimelineEntry[] }) {
                   width: `${width}%`,
                   backgroundColor: getToneColor(entry.tone),
                   opacity: 0.3 + entry.tone_intensity * 0.7,
+                  cursor: onSceneClick ? "pointer" : undefined,
                 }}
-                title={`${entry.tone || "?"} — ${entry.location || "?"} (${formatTime(entry.start)})`}
+                title={`${entry.tone || "?"} — ${entry.location || "?"} (${formatTime(entry.start)}) — Click for Scene DNA`}
+                onClick={() => onSceneClick?.(entry.scene_id)}
               >
                 <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-[10px] whitespace-nowrap z-10">
                   {entry.tone} &middot; {entry.location} &middot; {formatTime(entry.start)}
@@ -255,7 +257,8 @@ function ScreenTimeChart({ characters }: { characters: ScreenTimeChar[] }) {
 
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-3">Screen Time</h3>
+      <h3 className="text-lg font-semibold mb-1">Character Presence</h3>
+      <p className="text-xs text-gray-500 mb-3">Total duration of scenes each character appears in</p>
       <div className="space-y-2">
         {top.map((c, i) => (
           <div key={c.name} className="flex items-center gap-3">
@@ -713,7 +716,10 @@ export default function AnalyticsPage() {
       {/* Mood Timeline */}
       {timeline.length > 0 && !loading && (
         <section className="bg-gray-950 border border-gray-800 rounded-xl p-6">
-          <MoodTimeline data={timeline} />
+          <MoodTimeline data={timeline} onSceneClick={(id) => {
+            setDnaSceneId(String(id));
+            getSceneDNA(id).then(setDna).catch(() => setDna(null));
+          }} />
         </section>
       )}
 

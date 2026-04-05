@@ -11,7 +11,7 @@ Provides computed analytics endpoints for the frontend dashboards:
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, text, func as sqlfunc, distinct, desc, cast, Float
+from sqlalchemy import select, text, func as sqlfunc, distinct, desc, cast, Float, String
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -101,10 +101,12 @@ async def screen_time(
     season: int = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """Calculate character screen time across a show or season.
+    """Calculate character scene presence across a show or season.
 
     Sums scene durations where each character appears.
-    Returns ranked list plus per-episode breakdown.
+    Note: This measures 'scenes present in', not literal on-screen time.
+    A character present in a 60s scene gets 60s even if they're only
+    visible for part of it. Values are per-episode capped.
     """
     query = (
         select(Scene, Episode)
@@ -284,8 +286,8 @@ async def dialog_search(
         select(Scene, Episode)
         .join(Episode, Scene.episode_id == Episode.id)
         .where(
-            Scene.key_dialog.cast(text("text")).ilike(like_pattern)
-            | Scene.merged_transcript.cast(text("text")).ilike(like_pattern)
+            Scene.key_dialog.cast(String).ilike(like_pattern)
+            | Scene.merged_transcript.cast(String).ilike(like_pattern)
         )
         .order_by(Scene.overall_confidence.desc())
         .limit(limit)
@@ -302,7 +304,7 @@ async def dialog_search(
         # Find matching dialog lines
         matching_lines = []
         for d in (scene.key_dialog or []):
-            quote = d.get("exact_quote", "")
+            quote = d.get("quote", d.get("exact_quote", ""))
             if q_lower in quote.lower():
                 matching_lines.append({
                     "speaker": d.get("speaker", "Unknown"),

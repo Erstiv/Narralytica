@@ -30,6 +30,9 @@ export default function RootLayout({
                 <a href="/analytics" className="hover:text-simpsons-yellow transition">
                   Analytics
                 </a>
+                <a href="/reports" className="hover:text-simpsons-yellow transition">
+                  Reports
+                </a>
                 <a href="/tweak" className="hover:text-simpsons-yellow transition">
                   Tweak Studio
                 </a>

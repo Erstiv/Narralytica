@@ -2,12 +2,12 @@ import time
 import logging
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, text, func as sqlfunc, distinct
+from sqlalchemy import select, text, func as sqlfunc, distinct, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.embeddings import embed_query
-from app.models.models import Scene, Episode, SearchHistory
+from app.models.models import Scene, Episode, Show, SearchHistory
 from app.schemas.schemas import SearchRequest, SearchResult, SceneOut
 
 logger = logging.getLogger(__name__)
@@ -70,6 +70,53 @@ async def search_scenes(body: SearchRequest, db: AsyncSession = Depends(get_db))
         logger.warning(f"Embedding failed, falling back to text search: {e}")
         query_embedding = None
 
+    # Helper: look up episode context for a list of scenes
+    async def enrich_results(scene_rows, query_text):
+        def _get_scene(r):
+            if hasattr(r, 'episode_id'):
+                return r
+            try:
+                return r[0]
+            except (TypeError, IndexError):
+                return r
+        ep_ids = list({_get_scene(r).episode_id for r in scene_rows})
+        ep_result = await db.execute(
+            select(Episode, Show.name)
+            .join(Show, Episode.show_id == Show.id)
+            .where(Episode.id.in_(ep_ids))
+        )
+        ep_map = {}
+        for ep, show_name in ep_result.all():
+            ep_map[ep.id] = {
+                "show_name": show_name,
+                "episode_title": ep.title,
+                "episode_label": f"S{ep.season:02d}E{ep.episode_number:02d}",
+            }
+        return ep_map
+
+    # Helper: explain why a scene matched
+    def match_reason(scene, query_text, is_vector):
+        reasons = []
+        q_lower = query_text.lower()
+        desc = (scene.description_text or "").lower()
+        actions = (scene.actions or "").lower()
+        dialog_str = str(scene.key_dialog or []).lower()
+        location = (scene.location or "").lower()
+
+        if q_lower in desc:
+            reasons.append(f"description mentions \"{query_text}\"")
+        if q_lower in actions:
+            reasons.append(f"action mentions \"{query_text}\"")
+        if q_lower in dialog_str:
+            reasons.append(f"dialog mentions \"{query_text}\"")
+        if q_lower in location:
+            reasons.append(f"location mentions \"{query_text}\"")
+
+        if not reasons and is_vector:
+            reasons.append("semantic similarity (no exact keyword match)")
+
+        return "; ".join(reasons) if reasons else "semantic similarity"
+
     if query_embedding is not None:
         similarity_expr = (
             1 - Scene.description_embedding.cosine_distance(query_embedding)
@@ -85,13 +132,24 @@ async def search_scenes(body: SearchRequest, db: AsyncSession = Depends(get_db))
         result = await db.execute(query)
         rows = result.all()
 
-        results = [
-            SearchResult(
-                scene=SceneOut.model_validate(row[0]),
-                similarity=round(float(row[1]), 4),
-            )
-            for row in rows
-        ]
+        ep_map = await enrich_results(rows, body.query)
+
+        results = []
+        for row in rows:
+            scene = row[0]
+            sim = round(float(row[1]), 4)
+            # Filter out noise — anything below 55% is likely irrelevant
+            if sim < 0.55:
+                continue
+            ep_info = ep_map.get(scene.episode_id, {})
+            results.append(SearchResult(
+                scene=SceneOut.model_validate(scene),
+                similarity=sim,
+                show_name=ep_info.get("show_name"),
+                episode_title=ep_info.get("episode_title"),
+                episode_label=ep_info.get("episode_label"),
+                match_reason=match_reason(scene, body.query, True),
+            ))
     else:
         # Fallback: text-based search
         query = select(Scene)
@@ -100,7 +158,7 @@ async def search_scenes(body: SearchRequest, db: AsyncSession = Depends(get_db))
         if body.query:
             like_pattern = f"%{body.query}%"
             query = query.where(
-                Scene.key_dialog.cast(text("text")).ilike(like_pattern)
+                Scene.key_dialog.cast(String).ilike(like_pattern)
                 | Scene.description_text.ilike(like_pattern)
                 | Scene.actions.ilike(like_pattern)
             )
@@ -109,13 +167,19 @@ async def search_scenes(body: SearchRequest, db: AsyncSession = Depends(get_db))
         result = await db.execute(query)
         scenes = result.scalars().all()
 
-        results = [
-            SearchResult(
+        ep_map = await enrich_results(scenes, body.query)
+
+        results = []
+        for scene in scenes:
+            ep_info = ep_map.get(scene.episode_id, {})
+            results.append(SearchResult(
                 scene=SceneOut.model_validate(scene),
                 similarity=0.0,
-            )
-            for scene in scenes
-        ]
+                show_name=ep_info.get("show_name"),
+                episode_title=ep_info.get("episode_title"),
+                episode_label=ep_info.get("episode_label"),
+                match_reason=match_reason(scene, body.query, False),
+            ))
 
     latency = (time.time() - start) * 1000
 

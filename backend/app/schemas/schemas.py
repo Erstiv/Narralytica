@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 
 
@@ -63,9 +63,9 @@ class SceneOut(BaseModel):
     duration: float
 
     # Characters & Dialog
-    characters_present: list = []
-    key_dialog: list = []
-    character_interactions: list = []
+    characters_present: list | None = []
+    key_dialog: list | None = []
+    character_interactions: list | None = []
     character_motivations_feelings: str | None = None
 
     # Actions & Humor
@@ -81,7 +81,7 @@ class SceneOut(BaseModel):
     background: str | None = None
 
     # Visual & Cinematographic
-    color_palette: list = []
+    color_palette: list | None = []
     lighting: str | None = None
     camera_shot_type: str | None = None
     camera_movement: str | None = None
@@ -101,8 +101,14 @@ class SceneOut(BaseModel):
     emotional_arc: str | None = None
 
     # Narrative & Context
-    tropes_memes: list = []
-    cultural_references: list = []
+    tropes_memes: list | None = []
+    cultural_references: list | None = []
+
+    @field_validator('characters_present', 'key_dialog', 'character_interactions',
+                     'color_palette', 'tropes_memes', 'cultural_references', mode='before')
+    @classmethod
+    def null_to_empty_list(cls, v):
+        return v if v is not None else []
     recurring_gags: str | None = None
     plot_significance: str | None = None
     continuity_notes: str | None = None
@@ -164,6 +170,10 @@ class SearchRequest(BaseModel):
 class SearchResult(BaseModel):
     scene: SceneOut
     similarity: float
+    show_name: str | None = None
+    episode_title: str | None = None
+    episode_label: str | None = None  # "S01E02"
+    match_reason: str | None = None   # Why this matched
 
 
 # --- Tweaks ---

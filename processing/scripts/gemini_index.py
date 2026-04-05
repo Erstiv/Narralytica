@@ -128,24 +128,42 @@ def analyze_scene(
         total_scenes=total_scenes,
     )
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=[
-            types.Content(
-                parts=[
-                    types.Part.from_uri(
-                        file_uri=video_file.uri,
-                        mime_type=video_file.mime_type,
-                    ),
-                    types.Part.from_text(text=prompt),
-                ]
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[
+                    types.Content(
+                        parts=[
+                            types.Part.from_uri(
+                                file_uri=video_file.uri,
+                                mime_type=video_file.mime_type,
+                            ),
+                            types.Part.from_text(text=prompt),
+                        ]
+                    )
+                ],
+                config=types.GenerateContentConfig(
+                    temperature=0.2,
+                    response_mime_type="application/json",
+                ),
             )
-        ],
-        config=types.GenerateContentConfig(
-            temperature=0.2,
-            response_mime_type="application/json",
-        ),
-    )
+            break
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                wait_secs = 10 * (attempt + 1)
+                print(f"  Rate limited (429), waiting {wait_secs}s (attempt {attempt+1}/{max_retries})...")
+                time.sleep(wait_secs)
+                if attempt == max_retries - 1:
+                    print(f"  FATAL: Rate limit persists after {max_retries} retries")
+                    return {"error": "rate_limited", "raw_text": err_str[:500]}
+            else:
+                print(f"  API error: {err_str[:200]}, retrying in 5s...")
+                time.sleep(5)
+                if attempt == max_retries - 1:
+                    return {"error": "api_error", "raw_text": err_str[:500]}
 
     try:
         result = json.loads(response.text)

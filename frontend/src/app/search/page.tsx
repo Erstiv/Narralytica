@@ -4,11 +4,13 @@ import { useState, useRef, useEffect } from "react";
 import {
   searchScenes,
   getSearchFacets,
+  getShows,
   type SearchResult,
   type Scene,
   type MetadataDensity,
   type SearchFacets,
   type SearchRequest,
+  type ShowSummary,
 } from "@/lib/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8005";
@@ -362,11 +364,15 @@ export default function SearchPage() {
   const [playingScene, setPlayingScene] = useState<number | null>(null);
   const [expandedScene, setExpandedScene] = useState<number | null>(null);
   const [density, setDensity] = useState<MetadataDensity>("standard");
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
+  const [shows, setShows] = useState<ShowSummary[]>([]);
+  const [scopeShowId, setScopeShowId] = useState<number | undefined>(undefined);
+  const [scopeLabel, setScopeLabel] = useState("All Shows");
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     getSearchFacets().then(setFacets).catch(() => {});
+    getShows().then(setShows).catch(() => {});
   }, []);
 
   function handleFilterChange(key: string, value: string | number | undefined) {
@@ -393,7 +399,7 @@ export default function SearchPage() {
     setPlayingScene(null);
     setExpandedScene(null);
     try {
-      const request: SearchRequest = { query, limit: 30, ...filters };
+      const request: SearchRequest = { query, limit: 30, ...filters, show_id: scopeShowId };
       const scenes = await searchScenes(request);
       setResults(scenes);
     } catch {
@@ -436,13 +442,44 @@ export default function SearchPage() {
         </div>
       </div>
 
+      {/* Scope selector */}
+      <div className="flex items-center gap-3 text-sm">
+        <span className="text-gray-500">Searching:</span>
+        <div className="flex bg-gray-900 border border-gray-700 rounded-lg overflow-hidden">
+          <button
+            onClick={() => { setScopeShowId(undefined); setScopeLabel("All Shows"); }}
+            className={`px-3 py-1.5 text-xs font-medium transition ${
+              !scopeShowId ? "bg-simpsons-yellow text-black" : "text-gray-400 hover:text-gray-200 hover:bg-gray-800"
+            }`}
+          >
+            All Shows
+          </button>
+          {shows.filter(s => (s.episode_count ?? 0) > 0).map((s) => (
+            <button
+              key={s.id}
+              onClick={() => { setScopeShowId(s.id); setScopeLabel(s.name); }}
+              className={`px-3 py-1.5 text-xs font-medium transition border-l border-gray-700 ${
+                scopeShowId === s.id ? "bg-simpsons-yellow text-black" : "text-gray-400 hover:text-gray-200 hover:bg-gray-800"
+              }`}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+        {scopeShowId && (
+          <span className="text-xs text-gray-500 italic">
+            Filtering to {scopeLabel} only
+          </span>
+        )}
+      </div>
+
       {/* Search bar */}
       <form onSubmit={handleSearch} className="flex gap-3">
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder='e.g. "Homer frustrated with Mr. Burns in a union meeting"'
+          placeholder={scopeShowId ? `Search within ${scopeLabel}...` : "Search across all shows..."}
           className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-simpsons-yellow transition"
         />
         <button
@@ -474,15 +511,44 @@ export default function SearchPage() {
       )}
 
       {/* Video overlay */}
-      {playingScene !== null && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-8">
-          <div className="relative max-w-4xl w-full">
-            <button onClick={() => setPlayingScene(null)} className="absolute -top-10 right-0 text-white hover:text-simpsons-yellow text-xl">Close</button>
-            <video ref={videoRef} controls autoPlay className="w-full rounded-lg"
-              src={(() => { const r = results.find((r) => r.scene.id === playingScene); return r ? `${API_URL}/api/media/clips/scene_${String(results.sort((a,b) => a.scene.start_timestamp - b.scene.start_timestamp).findIndex((x) => x.scene.id === playingScene) + 1).padStart(2,"0")}.mp4` : ""; })()} />
+      {playingScene !== null && (() => {
+        const playResult = results.find((r) => r.scene.id === playingScene);
+        return (
+          <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center p-8">
+            <div className="relative max-w-4xl w-full">
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-white text-sm">
+                  <span className="text-simpsons-yellow font-semibold">Scene Preview</span>
+                  {playResult && (
+                    <span className="text-gray-400 ml-3">
+                      {formatTime(playResult.scene.start_timestamp)} &ndash; {formatTime(playResult.scene.end_timestamp)}
+                      {playResult.scene.location && <span className="ml-2 text-gray-500">| {playResult.scene.location}</span>}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => setPlayingScene(null)}
+                  className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                >
+                  &larr; Back to Results
+                </button>
+              </div>
+              {playResult?.scene.description_text && (
+                <p className="text-gray-300 text-sm mb-3 italic">{playResult.scene.description_text}</p>
+              )}
+              <video
+                ref={videoRef}
+                controls
+                autoPlay
+                className="w-full rounded-lg bg-black"
+                src={`${API_URL}/api/media/clip/${playResult?.scene.id}`}
+              >
+                <p className="text-gray-500 text-center p-8">Video preview not available</p>
+              </video>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Main content: sidebar + results */}
       <div className="flex gap-6">
@@ -508,6 +574,10 @@ export default function SearchPage() {
                 <div className="flex gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="text-xs text-blue-400 bg-blue-900/40 px-2 py-0.5 rounded font-medium">
+                        {result.episode_label || `Ep ${result.scene.episode_id}`}
+                        {result.episode_title && <span className="text-blue-300/60 ml-1">{result.episode_title}</span>}
+                      </span>
                       <span className="text-sm text-gray-400">
                         {formatTime(result.scene.start_timestamp)} &ndash; {formatTime(result.scene.end_timestamp)}
                       </span>
@@ -544,7 +614,13 @@ export default function SearchPage() {
                     )}
 
                     {result.scene.description_text && (
-                      <p className="text-sm text-gray-500 mt-1 truncate">{result.scene.description_text}</p>
+                      <p className="text-sm text-gray-500 mt-1 line-clamp-2">{result.scene.description_text}</p>
+                    )}
+
+                    {result.match_reason && (
+                      <p className="text-xs text-amber-600/80 mt-1 italic">
+                        Match: {result.match_reason}
+                      </p>
                     )}
 
                     <div className="flex gap-2 mt-2 flex-wrap">
