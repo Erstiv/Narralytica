@@ -107,7 +107,7 @@ async def bulk_create_scenes(
             scene_transitions=_to_str(scene_data.get("scene_transitions")),
             text_on_screen=_to_str(scene_data.get("text_on_screen")),
             # Search & Meta
-            overall_confidence=scene_data.get("overall_scene_confidence", 0),
+            overall_confidence=scene_data.get("overall_scene_confidence") or 0.85,
             description_text=scene_data.get("description_text"),
             description_embedding=embedding,
             merged_transcript=scene_data.get("merged_transcript", []),
