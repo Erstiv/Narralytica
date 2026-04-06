@@ -126,7 +126,7 @@ class SceneOut(BaseModel):
     text_on_screen: str | None = None
 
     # Search & Meta
-    overall_confidence: float = 0
+    overall_confidence: float | None = None
     thumbnail_path: str | None = None
     description_text: str | None = None
     merged_transcript: list | None = None

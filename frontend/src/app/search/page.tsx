@@ -584,12 +584,14 @@ export default function SearchPage() {
                       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-900 text-blue-300">
                         {(result.similarity * 100).toFixed(0)}% match
                       </span>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        result.scene.overall_confidence >= 0.8 ? "bg-green-900 text-green-300" :
-                        result.scene.overall_confidence >= 0.5 ? "bg-yellow-900 text-yellow-300" : "bg-red-900 text-red-300"
-                      }`}>
-                        {(result.scene.overall_confidence * 100).toFixed(0)}% conf
-                      </span>
+                      {result.scene.overall_confidence != null && (
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          result.scene.overall_confidence >= 0.8 ? "bg-green-900 text-green-300" :
+                          result.scene.overall_confidence >= 0.5 ? "bg-yellow-900 text-yellow-300" : "bg-red-900 text-red-300"
+                        }`}>
+                          {(result.scene.overall_confidence * 100).toFixed(0)}% conf
+                        </span>
+                      )}
                       {density !== "essential" && result.scene.location && (
                         <span className="px-2 py-0.5 rounded-full text-xs bg-gray-800 text-gray-400">{result.scene.location}</span>
                       )}
